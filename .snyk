@@ -1,0 +1,32 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.0
+
+# Configuration for Snyk scanning
+language-settings:
+  javascript:
+    # Ignore dev dependencies in production builds
+    ignoreDevDependencies: true
+
+# Patch and ignore rules
+ignore:
+  # Example: ignore specific vulnerabilities that are false positives or acceptable risks
+  # SNYK-JS-EXAMPLE-123456:
+  #   - '*':
+  #       reason: False positive for development environment only
+  #       expires: '2024-12-31T23:59:59.999Z'
+
+# License policy
+license-policy:
+  # Allow common open source licenses
+  allowed:
+    - MIT
+    - Apache-2.0
+    - BSD-3-Clause
+    - BSD-2-Clause
+    - ISC
+    - CC0-1.0
+  # Disallow problematic licenses
+  disallowed:
+    - GPL-3.0
+    - AGPL-3.0
+    - LGPL-3.0

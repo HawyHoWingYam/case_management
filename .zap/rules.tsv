@@ -1,0 +1,32 @@
+# ZAP Scanning Rules
+# Format: RULE_ID	THRESHOLD	[NOTES]
+
+# Ignore rules for development/testing
+10021	OFF	X-Content-Type-Options Header Missing (Dev environment)
+10020	OFF	X-Frame-Options Header Not Set (Dev environment)
+10016	OFF	Web Browser XSS Protection Not Enabled (Dev environment)
+10035	OFF	Strict-Transport-Security Header Not Set (Dev environment)
+
+# Adjust thresholds for common issues
+10054	MEDIUM	Cookie without SameSite Attribute
+10055	LOW	CSP Scanner: Wildcard Directive
+10056	LOW	X-Debug-Token Information Leak
+
+# Application-specific rules
+40012	HIGH	Cross Site Scripting (Reflected)
+40014	HIGH	Cross Site Scripting (Persistent)
+40016	HIGH	Cross Site Scripting (Persistent) - Prime
+40017	HIGH	Cross Site Scripting (Persistent) - Spider
+40018	HIGH	Cross Site Scripting (Persistent) - OTG-INPVAL-002
+
+# SQL Injection rules
+40018	HIGH	SQL Injection
+40019	HIGH	SQL Injection - MySQL
+40020	HIGH	SQL Injection - Hypersonic SQL
+40021	HIGH	SQL Injection - Oracle
+40022	HIGH	SQL Injection - PostgreSQL
+
+# Authentication rules
+10110	HIGH	Session Fixation
+10111	HIGH	Authentication Request Identified
+10112	HIGH	Session Management Response Identified

@@ -1,0 +1,29 @@
+{
+  "displayName": "Backend Integration Tests",
+  "testEnvironment": "node",
+  "rootDir": "../",
+  "testMatch": [
+    "<rootDir>/test/integration/**/*.test.ts"
+  ],
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "collectCoverageFrom": [
+    "src/**/*.(t|j)s",
+    "!src/**/*.spec.ts",
+    "!src/**/*.interface.ts",
+    "!src/**/*.dto.ts",
+    "!src/**/*.entity.ts",
+    "!src/main.ts",
+    "!src/migrations/**"
+  ],
+  "coverageDirectory": "./coverage/integration",
+  "coverageReporters": ["text", "lcov", "html"],
+  "setupFilesAfterEnv": ["<rootDir>/src/test/setup.ts"],
+  "moduleNameMapping": {
+    "^@/(.*)$": "<rootDir>/src/$1"
+  },
+  "testTimeout": 30000,
+  "globalSetup": "<rootDir>/test/integration/global-setup.ts",
+  "globalTeardown": "<rootDir>/test/integration/global-teardown.ts"
+}
