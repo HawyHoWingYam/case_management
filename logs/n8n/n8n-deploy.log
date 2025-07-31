@@ -1,0 +1,40 @@
+[0;34m[INFO][0m 开始 Claude MCP -> n8n 自动化部署
+[0;34m[INFO][0m Workflow: MCP Test Workflow
+[0;34m[INFO][0m 模板类型: api-slack
+[0;34m[INFO][0m 检查依赖环境...
+[0;32m[SUCCESS][0m 依赖检查通过
+[0;34m[INFO][0m 生成 workflow 模板: api-slack
+[0;34m[INFO][0m 验证 workflow 配置...
+[0;31m[ERROR][0m Workflow JSON 格式无效
+[0;34m[INFO][0m 开始 Claude MCP -> n8n 自动化部署
+[0;34m[INFO][0m Workflow: MCP Test Workflow
+[0;34m[INFO][0m 模板类型: api-slack
+[0;34m[INFO][0m 检查依赖环境...
+[0;32m[SUCCESS][0m 依赖检查通过
+[0;34m[INFO][0m 生成 workflow 模板: api-slack
+[0;34m[INFO][0m 验证 workflow 配置...
+[0;31m[ERROR][0m Workflow JSON 格式无效
+[0;34m[INFO][0m 开始 Claude MCP -> n8n 自动化部署
+[0;34m[INFO][0m Workflow: MCP Test Workflow
+[0;34m[INFO][0m 模板类型: api-slack
+[0;34m[INFO][0m 检查依赖环境...
+[0;32m[SUCCESS][0m 依赖检查通过
+[0;34m[INFO][0m 生成 workflow 模板: api-slack
+[0;34m[INFO][0m 验证 workflow 配置...
+[0;31m[ERROR][0m Workflow JSON 格式无效
+[0;34m[INFO][0m 开始 Claude MCP -> n8n 自动化部署
+[0;34m[INFO][0m Workflow: MCP Test Workflow
+[0;34m[INFO][0m 模板类型: api-slack
+[0;34m[INFO][0m 检查依赖环境...
+[0;32m[SUCCESS][0m 依赖检查通过
+[0;34m[INFO][0m 生成 workflow 模板: api-slack
+[0;34m[INFO][0m 验证 workflow 配置...
+[0;31m[ERROR][0m Workflow JSON 格式无效
+[0;34m[INFO][0m 开始 Claude MCP -> n8n 自动化部署
+[0;34m[INFO][0m Workflow: MCP Test Workflow
+[0;34m[INFO][0m 模板类型: api-slack
+[0;34m[INFO][0m 检查依赖环境...
+[0;32m[SUCCESS][0m 依赖检查通过
+[0;34m[INFO][0m 生成 workflow 模板: api-slack
+[0;34m[INFO][0m 验证 workflow 配置...
+[0;31m[ERROR][0m Workflow JSON 格式无效
