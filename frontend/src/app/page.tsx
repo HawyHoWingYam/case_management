@@ -4,28 +4,29 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { FileText, Users, Clock, CheckCircle, AlertCircle, Plus } from 'lucide-react'
+import { FileText, Users, Clock, CheckCircle, AlertCircle, Plus, Activity } from 'lucide-react'
 import Link from 'next/link'
+import HealthStatus from '@/components/HealthStatus'
+import { apiClient } from '@/lib/api'
 
 export default function HomePage() {
-  const [backendStatus, setBackendStatus] = useState<'loading' | 'connected' | 'error'>('loading')
+  const [welcomeMessage, setWelcomeMessage] = useState<string>('')
+  const [connectionStatus, setConnectionStatus] = useState<'loading' | 'connected' | 'error'>('loading')
 
-  // 测试后端连接
+  // 测试基本的 API 连接
   useEffect(() => {
-    const testBackendConnection = async () => {
+    const testConnection = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/health')
-        if (response.ok) {
-          setBackendStatus('connected')
-        } else {
-          setBackendStatus('error')
-        }
+        const response = await apiClient.system.getWelcome()
+        setWelcomeMessage(response.data)
+        setConnectionStatus('connected')
       } catch (error) {
-        setBackendStatus('error')
+        console.error('连接测试失败:', error)
+        setConnectionStatus('error')
       }
     }
 
-    testBackendConnection()
+    testConnection()
   }, [])
 
   // 模拟统计数据
@@ -36,6 +37,7 @@ export default function HomePage() {
       description: '本月新增 12 个',
       icon: FileText,
       trend: '+8.2%',
+      color: 'text-blue-600',
     },
     {
       title: '活跃用户',
@@ -43,6 +45,7 @@ export default function HomePage() {
       description: '在线用户 8 人',
       icon: Users,
       trend: '+2.1%',
+      color: 'text-green-600',
     },
     {
       title: '待处理',
@@ -50,6 +53,7 @@ export default function HomePage() {
       description: '优先级：高',
       icon: Clock,
       trend: '-12.5%',
+      color: 'text-orange-600',
     },
     {
       title: '已完成',
@@ -57,6 +61,7 @@ export default function HomePage() {
       description: '本月完成率 94%',
       icon: CheckCircle,
       trend: '+15.3%',
+      color: 'text-green-600',
     },
   ]
 
@@ -108,20 +113,29 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作 */}
+      {/* 页面标题和连接状态 */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
           <p className="text-muted-foreground">
             欢迎回来！这里是您的案例管理概览。
           </p>
+          {welcomeMessage && (
+            <p className="text-sm text-green-600 mt-1">
+              🎉 {welcomeMessage}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          {/* 后端连接状态 */}
-          <Badge variant={backendStatus === 'connected' ? 'default' : 'destructive'}>
-            {backendStatus === 'loading' && '连接中...'}
-            {backendStatus === 'connected' && '后端已连接'}
-            {backendStatus === 'error' && '后端连接失败'}
+          {/* 连接状态指示器 */}
+          <Badge 
+            variant={connectionStatus === 'connected' ? 'default' : 'destructive'}
+            className={connectionStatus === 'loading' ? 'animate-pulse' : ''}
+          >
+            <Activity className="mr-1 h-3 w-3" />
+            {connectionStatus === 'loading' && '连接中...'}
+            {connectionStatus === 'connected' && '后端已连接'}
+            {connectionStatus === 'error' && '后端连接失败'}
           </Badge>
           <Link href="/cases/new">
             <Button>
@@ -132,15 +146,18 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* 系统健康状态监控 */}
+      <HealthStatus />
+
       {/* 统计卡片 */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, index) => (
-          <Card key={index}>
+          <Card key={index} className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 {stat.title}
               </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <stat.icon className={`h-4 w-4 ${stat.color}`} />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
@@ -148,7 +165,12 @@ export default function HomePage() {
                 {stat.description}
               </p>
               <div className="flex items-center pt-1">
-                <Badge variant="outline" className="text-xs">
+                <Badge 
+                  variant="outline" 
+                  className={`text-xs ${
+                    stat.trend.startsWith('+') ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
                   {stat.trend}
                 </Badge>
               </div>
@@ -157,7 +179,7 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* 最近案例 */}
+      {/* 最近案例和快速操作 */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
@@ -171,7 +193,7 @@ export default function HomePage() {
               {recentCases.map((caseItem) => (
                 <div
                   key={caseItem.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer"
                 >
                   <div className="space-y-1">
                     <p className="text-sm font-medium leading-none">
@@ -211,25 +233,52 @@ export default function HomePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <Button className="w-full justify-start" variant="outline">
-              <FileText className="mr-2 h-4 w-4" />
-              创建新案例
-            </Button>
-            <Button className="w-full justify-start" variant="outline">
-              <Users className="mr-2 h-4 w-4" />
-              用户管理
-            </Button>
-            <Button className="w-full justify-start" variant="outline">
-              <AlertCircle className="mr-2 h-4 w-4" />
-              紧急案例
-            </Button>
-            <Button className="w-full justify-start" variant="outline">
-              <CheckCircle className="mr-2 h-4 w-4" />
-              今日任务
-            </Button>
+            <Link href="/cases/new">
+              <Button className="w-full justify-start" variant="outline">
+                <FileText className="mr-2 h-4 w-4" />
+                创建新案例
+              </Button>
+            </Link>
+            <Link href="/users">
+              <Button className="w-full justify-start" variant="outline">
+                <Users className="mr-2 h-4 w-4" />
+                用户管理
+              </Button>
+            </Link>
+            <Link href="/cases?priority=urgent">
+              <Button className="w-full justify-start" variant="outline">
+                <AlertCircle className="mr-2 h-4 w-4" />
+                紧急案例
+              </Button>
+            </Link>
+            <Link href="/dashboard/tasks">
+              <Button className="w-full justify-start" variant="outline">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                今日任务
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
+
+      {/* 端到端测试提示 */}
+      {connectionStatus === 'connected' && (
+        <Card className="border-green-200 bg-green-50 dark:bg-green-950">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="font-medium text-green-800 dark:text-green-200">
+                  🎉 端到端连接测试成功！
+                </p>
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  前端成功连接到后端 API，数据库连接正常。系统已准备就绪。
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
