@@ -24,6 +24,28 @@ export class CasesService {
    */
   async create(createCaseDto: CreateCaseDto, createdBy: number) {
     try {
+      // Debug: Log the received data
+      this.logger.log(`Creating case with DTO: ${JSON.stringify(createCaseDto)}`);
+      this.logger.log(`assigned_to value: ${createCaseDto.assigned_to}, type: ${typeof createCaseDto.assigned_to}`);
+      
+      // Debug: Detailed metadata logging
+      if (createCaseDto.metadata) {
+        this.logger.log(`Metadata received: ${JSON.stringify(createCaseDto.metadata)}`);
+        this.logger.log(`Metadata type: ${typeof createCaseDto.metadata}`);
+        this.logger.log(`Metadata keys: ${Object.keys(createCaseDto.metadata)}`);
+        
+        if (createCaseDto.metadata.attachments) {
+          this.logger.log(`Attachments found in metadata: ${createCaseDto.metadata.attachments.length} files`);
+          createCaseDto.metadata.attachments.forEach((attachment, index) => {
+            this.logger.log(`Attachment ${index + 1}: ${JSON.stringify(attachment)}`);
+          });
+        } else {
+          this.logger.log(`No attachments found in metadata`);
+        }
+      } else {
+        this.logger.log(`No metadata provided`);
+      }
+      
       // 如果指定了 assigned_to，验证用户是否存在
       if (createCaseDto.assigned_to) {
         const assignedUser = await this.prisma.user.findUnique({
@@ -40,9 +62,10 @@ export class CasesService {
           title: createCaseDto.title,
           description: createCaseDto.description,
           priority: createCaseDto.priority || Priority.MEDIUM,
-          status: CaseStatus.OPEN, // 默认状态为 OPEN
+          status: createCaseDto.assigned_to ? CaseStatus.PENDING : CaseStatus.OPEN, // 如果有指派则为 PENDING，否则为 OPEN
           created_by: createdBy,
           assigned_to: createCaseDto.assigned_to,
+          metadata: createCaseDto.metadata,
         },
         include: {
           creator: {
@@ -55,6 +78,18 @@ export class CasesService {
         },
       });
 
+      // Debug: Log what was actually saved to database
+      this.logger.log(`New case created with ID: ${newCase.case_id}`);
+      this.logger.log(`Case metadata stored in DB: ${JSON.stringify(newCase.metadata)}`);
+      this.logger.log(`Case metadata type: ${typeof newCase.metadata}`);
+      if (newCase.metadata) {
+        this.logger.log(`Case metadata keys: ${Object.keys(newCase.metadata)}`);
+        const metadata = newCase.metadata as any;
+        if (metadata.attachments) {
+          this.logger.log(`Case has ${metadata.attachments.length} attachments in DB`);
+        }
+      }
+
       // 创建案件日志
       await this.prisma.caseLog.create({
         data: {
@@ -64,6 +99,23 @@ export class CasesService {
           details: `创建了新案件："${newCase.title}"`,
         },
       });
+
+      // 如果创建时就有指派，添加指派日志
+      if (createCaseDto.assigned_to) {
+        const assignedUser = await this.prisma.user.findUnique({
+          where: { user_id: createCaseDto.assigned_to },
+          select: { username: true }
+        });
+        
+        await this.prisma.caseLog.create({
+          data: {
+            case_id: newCase.case_id,
+            user_id: createdBy,
+            action: '指派案件',
+            details: `创建时将案件指派给 ${assignedUser?.username || 'Unknown'} (ID: ${createCaseDto.assigned_to})，状态变更为 PENDING`,
+          },
+        });
+      }
 
       this.logger.log(`New case created: ${newCase.case_id} by user ${createdBy}`);
 
@@ -105,6 +157,10 @@ export class CasesService {
         include = ['creator', 'assignee'],
       } = query;
 
+      // 确保 page 和 limit 是数字类型
+      const pageNum = typeof page === 'string' ? parseInt(page, 10) : page;
+      const limitNum = typeof limit === 'string' ? parseInt(limit, 10) : limit;
+
       // 构建 where 条件
       const whereCondition = this.buildWhereCondition({
         view,
@@ -128,7 +184,7 @@ export class CasesService {
       const orderBy = this.buildOrderByCondition(sortBy, sortOrder);
 
       // 计算分页
-      const skip = (page - 1) * limit;
+      const skip = (pageNum - 1) * limitNum;
 
       // 执行查询
       const [cases, total] = await Promise.all([
@@ -137,7 +193,7 @@ export class CasesService {
           include: includeCondition,
           orderBy,
           skip,
-          take: limit,
+          take: limitNum,
         }),
         this.prisma.case.count({
           where: whereCondition,
@@ -145,9 +201,9 @@ export class CasesService {
       ]);
 
       // 计算分页信息
-      const totalPages = Math.ceil(total / limit);
-      const hasNextPage = page < totalPages;
-      const hasPreviousPage = page > 1;
+      const totalPages = Math.ceil(total / limitNum);
+      const hasNextPage = pageNum < totalPages;
+      const hasPreviousPage = pageNum > 1;
 
       // 映射字段名并构建响应
       const mappedCases = cases.map(caseItem => this.mapCaseFields(caseItem));
@@ -159,8 +215,8 @@ export class CasesService {
         data: mappedCases,
         meta: {
           total,
-          page,
-          limit,
+          page: pageNum,
+          limit: limitNum,
           totalPages,
           hasNextPage,
           hasPreviousPage,
@@ -198,6 +254,13 @@ export class CasesService {
               email: true,
             },
           },
+          assignee: {
+            select: {
+              user_id: true,
+              username: true,
+              email: true,
+            },
+          },
           case_logs: {
             include: {
               user: {
@@ -216,6 +279,25 @@ export class CasesService {
 
       if (!caseData) {
         throw new NotFoundException('案件不存在');
+      }
+
+      // Debug: Log retrieved case data for metadata debugging
+      this.logger.log(`Retrieved case ${id} from database`);
+      this.logger.log(`Case metadata from DB: ${JSON.stringify(caseData.metadata)}`);
+      this.logger.log(`Case metadata type: ${typeof caseData.metadata}`);
+      if (caseData.metadata) {
+        this.logger.log(`Case metadata keys: ${Object.keys(caseData.metadata)}`);
+        const metadata = caseData.metadata as any;
+        if (metadata.attachments) {
+          this.logger.log(`Case has ${metadata.attachments.length} attachments from DB`);
+          metadata.attachments.forEach((attachment, index) => {
+            this.logger.log(`DB Attachment ${index + 1}: ${JSON.stringify(attachment)}`);
+          });
+        } else {
+          this.logger.log(`No attachments found in case metadata from DB`);
+        }
+      } else {
+        this.logger.log(`Case metadata is null/undefined from DB`);
       }
 
       // 权限检查：普通用户只能查看自己相关的案件

@@ -121,8 +121,9 @@ export const apiClient = {
 
     // 创建案件
     create: async (data: CreateCaseFormData): Promise<{ data: Case }> => {
-      const response: AxiosResponse<{ data: Case }> = await api.post(API_ENDPOINTS.CASES.CREATE, data)
-      return response.data
+      const response: AxiosResponse<Case> = await api.post(API_ENDPOINTS.CASES.CREATE, data)
+      // Backend returns case directly, wrap it in data property for consistency
+      return { data: response.data }
     },
 
     // 更新案件
@@ -155,6 +156,32 @@ export const apiClient = {
     addComment: async (caseId: number, data: { comment: string; isInternal?: boolean; userId?: number }): Promise<{ data: any }> => {
       const response: AxiosResponse<{ data: any }> = await api.post(`${API_ENDPOINTS.CASES.DETAIL(caseId)}/comments`, data)
       return response.data
+    },
+
+    // 获取可指派的 Caseworker 列表
+    getAvailableCaseworkers: async (): Promise<{ data: any[] }> => {
+      const response: AxiosResponse<any[]> = await api.get(`/api/cases/available-caseworkers`)
+      return { data: response.data }
+    },
+
+    // 指派案件给 Caseworker (ADMIN/MANAGER only)
+    assignCase: async (caseId: number, assignedCaseworkerId: number): Promise<{ data: any }> => {
+      const response: AxiosResponse<any> = await api.patch(`/api/cases/${caseId}/assign`, {
+        assignedCaseworkerId
+      })
+      return { data: response.data }
+    },
+
+    // Caseworker 接受指派的案件 (USER only)
+    acceptCase: async (caseId: number): Promise<{ data: any }> => {
+      const response: AxiosResponse<any> = await api.patch(`/api/cases/${caseId}/accept`)
+      return { data: response.data }
+    },
+
+    // Caseworker 拒绝指派的案件 (USER only)
+    rejectCase: async (caseId: number): Promise<{ data: any }> => {
+      const response: AxiosResponse<any> = await api.patch(`/api/cases/${caseId}/reject`)
+      return { data: response.data }
     },
   },
 
@@ -279,14 +306,11 @@ export const apiClient = {
 
   // ==================== 文件相关 API ====================
   files: {
-    // 上传文件
-    upload: async (files: FileList | File[]): Promise<{ data: any[] }> => {
+    // 上传单个文件
+    upload: async (file: File): Promise<{ data: any }> => {
       const formData = new FormData()
-      Array.from(files).forEach((file, index) => {
-        formData.append(`files`, file)
-      })
-
-      const response: AxiosResponse<{ data: any[] }> = await api.post(
+      formData.append('file', file)
+      const response: AxiosResponse<any> = await api.post(
         API_ENDPOINTS.FILES.UPLOAD,
         formData,
         {
@@ -295,7 +319,25 @@ export const apiClient = {
           },
         }
       )
-      return response.data
+      return { data: response.data }
+    },
+
+    // 上传多个文件
+    uploadMultiple: async (files: FileList | File[]): Promise<{ data: any[] }> => {
+      const formData = new FormData()
+      Array.from(files).forEach((file) => {
+        formData.append('files', file)
+      })
+      const response: AxiosResponse<any[]> = await api.post(
+        API_ENDPOINTS.FILES.UPLOAD_MULTIPLE,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      )
+      return { data: response.data }
     },
 
     // 下载文件

@@ -54,7 +54,14 @@ export default function CreateCasePage() {
     setIsSubmitting(true)
     
     try {
+      console.log('🚀 [CreateCasePage] Received data from CaseForm:', data)
+      console.log('🚀 [CreateCasePage] data.assigned_to:', data.assigned_to, 'type:', typeof data.assigned_to)
+      console.log('🚀 [CreateCasePage] About to call apiClient.cases.create...')
+      
       const response = await apiClient.cases.create(data)
+      
+      console.log('✅ [CreateCasePage] API response received:', response)
+      console.log('✅ [CreateCasePage] response.data:', response.data)
       
       setSubmitSuccess(true)
       
@@ -67,7 +74,12 @@ export default function CreateCasePage() {
       }, 2000)
       
     } catch (error: any) {
-      console.error('创建案件失败:', error)
+      console.error('❌ [CreateCasePage] 创建案件失败:', error)
+      console.error('❌ [CreateCasePage] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      })
       throw error // 让表单组件处理错误显示
     } finally {
       setIsSubmitting(false)

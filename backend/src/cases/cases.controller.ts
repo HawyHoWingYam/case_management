@@ -261,6 +261,31 @@ export class CasesController {
     return this.casesService.getStats(req.user.user_id, req.user.role, period);
   }
 
+  @Get('available-caseworkers')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'MANAGER')
+  @ApiOperation({ summary: '获取可指派的 Caseworker 列表' })
+  @ApiResponse({
+    status: 200,
+    description: '成功获取 Caseworker 列表',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          user_id: { type: 'number', example: 2 },
+          username: { type: 'string', example: 'john_caseworker' },
+          email: { type: 'string', example: 'john@company.com' },
+          activeCases: { type: 'number', example: 3 },
+          canAcceptMore: { type: 'boolean', example: true }
+        }
+      }
+    }
+  })
+  async getAvailableCaseworkers(@Request() req) {
+    return this.casesService.getAvailableCaseworkers();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '根据ID获取案件详情' })
   @ApiParam({
@@ -474,29 +499,6 @@ export class CasesController {
   @ApiResponse({ status: 404, description: '案件不存在' })
  
 
-  @Get('available-caseworkers')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'MANAGER')
-  @ApiOperation({ summary: '獲取可指派的 Caseworker 列表' })
-  @ApiResponse({
-    status: 200,
-    description: '成功獲取 Caseworker 列表',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          user_id: { type: 'number', example: 2 },
-          username: { type: 'string', example: 'john_caseworker' },
-          email: { type: 'string', example: 'john@company.com' },
-          activeCases: { type: 'number', example: 3 },
-          canAcceptMore: { type: 'boolean', example: true }
-        }
-      }
-    }
-  })
-
-
   @Patch(':id/assign')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'MANAGER') // Chair 權限
@@ -592,30 +594,5 @@ export class CasesController {
     return this.casesService.rejectCase(id, req.user.user_id);
   }
 
-  @Get('available-caseworkers')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'MANAGER')
-  @ApiOperation({ summary: '獲取可指派的 Caseworker 列表' })
-  @ApiResponse({
-    status: 200,
-    description: '成功獲取 Caseworker 列表',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          user_id: { type: 'number', example: 2 },
-          username: { type: 'string', example: 'john_caseworker' },
-          email: { type: 'string', example: 'john@company.com' },
-          activeCases: { type: 'number', example: 3 },
-          canAcceptMore: { type: 'boolean', example: true }
-        }
-      }
-    }
-  })
-  @ApiResponse({ status: 403, description: '權限不足，只有 ADMIN 和 MANAGER 可以查看' })
-  async getAvailableCaseworkers(@Request() req) {
-    return this.casesService.getAvailableCaseworkers();
-  }
 
 }

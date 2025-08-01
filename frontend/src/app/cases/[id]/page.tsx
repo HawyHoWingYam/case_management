@@ -33,6 +33,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { apiClient } from '@/lib/api'
 import { Case } from '@/types/case'
 import { CaseStatusBadge, CasePriorityBadge } from '@/components/cases/CaseStatusBadge'
+import { CaseAcceptReject } from '@/components/cases/CaseAcceptReject'
 import { toast } from 'sonner'
 
 export default function CaseDetailPage() {
@@ -59,9 +60,24 @@ export default function CaseDetailPage() {
     
     try {
       const response = await apiClient.cases.getById(parseInt(caseId, 10))
+      console.log('🔍 [CaseDetailPage] DEBUG: Full API response:', response)
+      console.log('🔍 [CaseDetailPage] DEBUG: Case data:', response.data)
+      console.log('🔍 [CaseDetailPage] DEBUG: Case metadata:', response.data.metadata)
+      console.log('🔍 [CaseDetailPage] DEBUG: Metadata type:', typeof response.data.metadata)
+      console.log('🔍 [CaseDetailPage] DEBUG: Metadata keys:', response.data.metadata ? Object.keys(response.data.metadata) : 'no metadata')
+      
+      // Check if there are any files in metadata
+      if (response.data.metadata && response.data.metadata.attachments) {
+        console.log('🔍 [CaseDetailPage] DEBUG: Found attachments:', response.data.metadata.attachments)
+        console.log('🔍 [CaseDetailPage] DEBUG: Attachments count:', response.data.metadata.attachments.length)
+      } else {
+        console.log('🔍 [CaseDetailPage] DEBUG: No attachments found in metadata')
+      }
+      
       setCaseData(response.data)
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '获取案件详情失败'
+      console.error('🔍 [CaseDetailPage] DEBUG: Error fetching case detail:', error)
       setError(errorMessage)
       toast.error(errorMessage)
     } finally {
@@ -85,6 +101,11 @@ export default function CaseDetailPage() {
       const errorMessage = error.response?.data?.message || '删除案件失败'
       toast.error(errorMessage)
     }
+  }
+
+  // 处理案件更新（用于accept/reject操作）
+  const handleCaseUpdate = (updatedCase: Case) => {
+    setCaseData(updatedCase)
   }
 
   // 检查用户权限
@@ -336,21 +357,66 @@ export default function CaseDetailPage() {
               <Separator />
               <div>
                 <h3 className="text-sm font-medium mb-3">附加信息</h3>
+                {/* DEBUG: Log what we're about to render */}
+                {console.log('🔍 [CaseDetailPage] DEBUG: Rendering metadata section')}
+                {console.log('🔍 [CaseDetailPage] DEBUG: caseData.metadata:', caseData.metadata)}
                 <div className="space-y-2">
-                  {Object.entries(caseData.metadata).map(([key, value], metaIndex) => (
-                    <div key={`meta-${key}-${metaIndex}`} className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">{key}:</span>
-                      <span className="text-sm font-medium">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                      </span>
-                    </div>
-                  ))}
+                  {Object.entries(caseData.metadata).map(([key, value], metaIndex) => {
+                    console.log(`🔍 [CaseDetailPage] DEBUG: Metadata entry ${metaIndex}: key="${key}", value=`, value)
+                    
+                    // Special handling for attachments
+                    if (key === 'attachments' && Array.isArray(value)) {
+                      console.log('🔍 [CaseDetailPage] DEBUG: Found attachments array with length:', value.length)
+                      return (
+                        <div key={`meta-${key}-${metaIndex}`} className="space-y-2">
+                          <span className="text-sm font-medium text-muted-foreground">文件附件:</span>
+                          <div className="space-y-1">
+                            {value.map((attachment: any, attachmentIndex: number) => (
+                              <div key={`attachment-${attachmentIndex}`} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                <div className="flex items-center space-x-2">
+                                  <FileText className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">{attachment.originalname || attachment.filename}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({attachment.size ? `${Math.round(attachment.size / 1024)}KB` : 'N/A'})
+                                  </span>
+                                </div>
+                                {attachment.url && (
+                                  <Button variant="ghost" size="sm" asChild>
+                                    <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+                                      下载
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    }
+                    
+                    // Default metadata display
+                    return (
+                      <div key={`meta-${key}-${metaIndex}`} className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">{key}:</span>
+                        <span className="text-sm font-medium">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      {/* Case Accept/Reject Actions - Only show for assigned caseworkers with PENDING status */}
+      <CaseAcceptReject 
+        caseData={caseData}
+        onCaseUpdate={handleCaseUpdate}
+        className="mb-6"
+      />
 
       {/* 操作日志 */}
       {caseData.case_logs && caseData.case_logs.length > 0 && (

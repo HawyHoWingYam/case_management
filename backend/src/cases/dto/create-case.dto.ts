@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum, IsNotEmpty, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNotEmpty, MaxLength, IsObject } from 'class-validator';
 import { Priority } from '@prisma/client';
 
 export class CreateCaseDto {
@@ -37,6 +37,24 @@ export class CreateCaseDto {
   })
   @IsOptional()
   assigned_to?: number;
+
+  @ApiPropertyOptional({
+    description: '案件元数据（包含文件附件等信息）',
+    example: {
+      attachments: [
+        {
+          filename: 'document.pdf',
+          originalname: 'My Document.pdf',
+          url: 'http://localhost:9000/case-files/document.pdf',
+          size: 12345,
+          mimetype: 'application/pdf'
+        }
+      ]
+    },
+  })
+  @IsOptional()
+  @IsObject()
+  metadata?: any;
 }
 
 export class CreateCaseResponseDto {

@@ -1,7 +1,7 @@
 // frontend/src/components/cases/CaseActions.tsx
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -29,11 +29,15 @@ import {
   UserPlus,
   Flag,
   MessageSquare,
-  AlertTriangle
+  AlertTriangle,
+  User
 } from 'lucide-react'
 
 import { Case, CaseStatus, CasePriority } from '@/types/case'
 import { CASE_STATUS_CONFIG, CASE_PRIORITY_CONFIG } from '@/types/case'
+import { apiClient } from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
+import { toast } from 'sonner'
 
 interface CaseActionsProps {
   caseData: Case
@@ -47,6 +51,15 @@ interface CaseActionsProps {
   onPriorityChange: (priority: CasePriority) => void
   onAssign: (userId: number | null, comment?: string) => void
   isLoading?: boolean
+}
+
+// 可指派用户类型
+interface AvailableCaseworker {
+  user_id: number
+  username: string
+  email: string
+  activeCases: number
+  canAcceptMore: boolean
 }
 
 export function CaseActions({
@@ -66,12 +79,37 @@ export function CaseActions({
   const [selectedAssignee, setSelectedAssignee] = useState<string>('')
   const [actionComment, setActionComment] = useState('')
 
-  // 模拟用户列表（实际应用中应该从API获取）
-  const mockUsers = [
-    { id: 1, username: 'john_doe', email: 'john@example.com' },
-    { id: 2, username: 'jane_smith', email: 'jane@example.com' },
-    { id: 3, username: 'admin', email: 'admin@example.com' },
-  ]
+  // 可指派用户状态
+  const [availableCaseworkers, setAvailableCaseworkers] = useState<AvailableCaseworker[]>([])
+  const [loadingCaseworkers, setLoadingCaseworkers] = useState(false)
+  const { hasRole } = useAuthStore()
+
+  // 获取可指派的 Caseworker 列表
+  useEffect(() => {
+    const fetchAvailableCaseworkers = async () => {
+      // 只有 MANAGER 和 ADMIN 才能看到可指派的用户列表
+      if (!hasRole(['MANAGER', 'ADMIN'])) {
+        return
+      }
+
+      setLoadingCaseworkers(true)
+      try {
+        const response = await apiClient.cases.getAvailableCaseworkers()
+        setAvailableCaseworkers(response.data)
+      } catch (error) {
+        console.error('Failed to fetch available caseworkers:', error)
+        // 如果 API 失败，使用空数组，不显示错误
+        setAvailableCaseworkers([])
+      } finally {
+        setLoadingCaseworkers(false)
+      }
+    }
+
+    // 只有在打开指派对话框时才获取数据
+    if (isAssignDialogOpen) {
+      fetchAvailableCaseworkers()
+    }
+  }, [hasRole, isAssignDialogOpen])
 
   // 获取状态变更的快速操作
   const getStatusActions = () => {
@@ -334,13 +372,27 @@ export function CaseActions({
                     <label className="text-sm font-medium">指派给</label>
                     <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
                       <SelectTrigger>
-                        <SelectValue placeholder="选择用户" />
+                        <SelectValue placeholder={loadingCaseworkers ? "加载中..." : "选择用户"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unassigned">取消指派</SelectItem>
-                        {mockUsers.map((user) => (
-                          <SelectItem key={user.id} value={user.id.toString()}>
-                            {user.username} ({user.email})
+                        {availableCaseworkers.map((caseworker) => (
+                          <SelectItem key={caseworker.user_id} value={caseworker.user_id.toString()}>
+                            <div className="flex items-center space-x-2">
+                              <User className="h-3 w-3" />
+                              <span>{caseworker.username}</span>
+                              <span className="text-xs text-muted-foreground">
+                                ({caseworker.email})
+                              </span>
+                              {!caseworker.canAcceptMore && (
+                                <Badge variant="secondary" className="text-xs">满载</Badge>
+                              )}
+                              {caseworker.activeCases > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {caseworker.activeCases}个案件
+                                </span>
+                              )}
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>

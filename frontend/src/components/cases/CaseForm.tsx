@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -43,6 +43,8 @@ import { CasePriority, CreateCaseFormData, CASE_PRIORITY_CONFIG } from '@/types/
 import { FileUpload } from './FileUpload'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { apiClient } from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
 
 // 表单验证模式
 const caseFormSchema = z.object({
@@ -78,12 +80,14 @@ interface CaseFormProps {
   className?: string
 }
 
-// 模拟用户列表（实际应用中应该从API获取）
-const mockUsers = [
-  { id: 'user-1', username: 'john_doe', email: 'john@example.com' },
-  { id: 'user-2', username: 'jane_smith', email: 'jane@example.com' },
-  { id: 'user-3', username: 'admin', email: 'admin@example.com' },
-]
+// 可指派用户类型
+interface AvailableCaseworker {
+  user_id: number
+  username: string
+  email: string
+  activeCases: number
+  canAcceptMore: boolean
+}
 
 export function CaseForm({
   onSubmit,
@@ -94,6 +98,9 @@ export function CaseForm({
 }: CaseFormProps) {
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [availableCaseworkers, setAvailableCaseworkers] = useState<AvailableCaseworker[]>([])
+  const [loadingCaseworkers, setLoadingCaseworkers] = useState(false)
+  const { hasRole } = useAuthStore()
 
   const form = useForm<CaseFormValues>({
     resolver: zodResolver(caseFormSchema),
@@ -107,12 +114,62 @@ export function CaseForm({
     },
   })
 
+  // 获取可指派的 Caseworker 列表
+  useEffect(() => {
+    const fetchAvailableCaseworkers = async () => {
+      // 只有 MANAGER 和 ADMIN 才能看到可指派的用户列表
+      if (!hasRole(['MANAGER', 'ADMIN'])) {
+        return
+      }
+
+      setLoadingCaseworkers(true)
+      try {
+        const response = await apiClient.cases.getAvailableCaseworkers()
+        setAvailableCaseworkers(response.data)
+      } catch (error) {
+        console.error('Failed to fetch available caseworkers:', error)
+        // 如果 API 失败，使用空数组，不显示错误
+        setAvailableCaseworkers([])
+      } finally {
+        setLoadingCaseworkers(false)
+      }
+    }
+
+    fetchAvailableCaseworkers()
+  }, [hasRole])
+
+  // Debug wrapper for file uploads
+  const handleFilesUploaded = (files: any[]) => {
+    console.log('🔍 [CaseForm] DEBUG: FileUpload onFilesUploaded callback triggered')
+    console.log('🔍 [CaseForm] DEBUG: Received files:', files)
+    console.log('🔍 [CaseForm] DEBUG: Files length:', files.length)
+    files.forEach((file, index) => {
+      console.log(`🔍 [CaseForm] DEBUG: Received file ${index + 1}:`, file)
+    })
+    setUploadedFiles(files)
+    console.log('🔍 [CaseForm] DEBUG: setUploadedFiles called with:', files)
+  }
+
   const handleSubmit = async (values: CaseFormValues) => {
     setSubmitError(null)
     
     try {
+      // DEBUG: Log original form values
+      console.log('🔍 [CaseForm] Original form values:', values)
+      console.log('🔍 [CaseForm] values.assigned_to_id:', values.assigned_to_id, 'type:', typeof values.assigned_to_id)
+      
+      // 處理 assigned_to_id：轉換為數字或 undefined
+      let assignedToId: number | undefined = undefined
+      if (values.assigned_to_id && values.assigned_to_id !== 'unassigned') {
+        assignedToId = parseInt(values.assigned_to_id, 10)
+        console.log('🔍 [CaseForm] Parsed assignedToId:', assignedToId, 'type:', typeof assignedToId)
+      } else {
+        console.log('🔍 [CaseForm] No assignment or unassigned selected')
+      }
+
       const submitData: CreateCaseFormData = {
         ...values,
+        assigned_to_id: assignedToId,
         due_date: values.due_date?.toISOString(),
         metadata: {
           ...values.metadata,
@@ -126,7 +183,47 @@ export function CaseForm({
         }
       }
 
-      await onSubmit(submitData)
+      // Debug: Log detailed file and metadata information
+      console.log('🔍 [CaseForm] DEBUG: Building submitData with files')
+      console.log('🔍 [CaseForm] DEBUG: uploadedFiles state:', uploadedFiles)
+      console.log('🔍 [CaseForm] DEBUG: uploadedFiles length:', uploadedFiles.length)
+      uploadedFiles.forEach((file, index) => {
+        console.log(`🔍 [CaseForm] DEBUG: uploadedFile ${index + 1}:`, file)
+        console.log(`🔍 [CaseForm] DEBUG: - filename: ${file.filename}`)
+        console.log(`🔍 [CaseForm] DEBUG: - originalname: ${file.originalname}`)
+        console.log(`🔍 [CaseForm] DEBUG: - url: ${file.url}`)
+        console.log(`🔍 [CaseForm] DEBUG: - size: ${file.size}`)
+        console.log(`🔍 [CaseForm] DEBUG: - mimetype: ${file.mimetype}`)
+      })
+      console.log('🔍 [CaseForm] DEBUG: submitData.metadata:', submitData.metadata)
+      console.log('🔍 [CaseForm] DEBUG: submitData.metadata.attachments:', submitData.metadata.attachments)
+
+      console.log('🔍 [CaseForm] submitData:', submitData)
+      console.log('🔍 [CaseForm] submitData.assigned_to_id:', submitData.assigned_to_id)
+
+      // Convert assigned_to_id to assigned_to for backend compatibility
+      const backendData = {
+        ...submitData,
+        assigned_to: submitData.assigned_to_id,
+        assigned_to_id: undefined  // Remove the frontend field
+      }
+
+      console.log('🔍 [CaseForm] DEBUG: Final backendData conversion')
+      console.log('🔍 [CaseForm] DEBUG: backendData.metadata:', backendData.metadata)
+      console.log('🔍 [CaseForm] DEBUG: backendData.metadata.attachments:', backendData.metadata.attachments)
+      if (backendData.metadata?.attachments) {
+        console.log('🔍 [CaseForm] DEBUG: backendData has', backendData.metadata.attachments.length, 'attachments')
+        backendData.metadata.attachments.forEach((attachment, index) => {
+          console.log(`🔍 [CaseForm] DEBUG: backendData attachment ${index + 1}:`, attachment)
+        })
+      } else {
+        console.log('🔍 [CaseForm] DEBUG: backendData has no attachments or metadata')
+      }
+
+      console.log('🔍 [CaseForm] Final backendData being sent:', backendData)
+      console.log('🔍 [CaseForm] backendData.assigned_to:', backendData.assigned_to, 'type:', typeof backendData.assigned_to)
+
+      await onSubmit(backendData)
       
       if (mode === 'create') {
         form.reset()
@@ -297,23 +394,31 @@ export function CaseForm({
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || loadingCaseworkers}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="选择处理人员" />
+                              <SelectValue placeholder={loadingCaseworkers ? "加载中..." : "选择处理人员"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="unassigned">不指派</SelectItem>
-                            {mockUsers.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
+                            {availableCaseworkers.map((caseworker) => (
+                              <SelectItem key={caseworker.user_id} value={caseworker.user_id.toString()}>
                                 <div className="flex items-center space-x-2">
                                   <User className="h-3 w-3" />
-                                  <span>{user.username}</span>
+                                  <span>{caseworker.username}</span>
                                   <span className="text-xs text-muted-foreground">
-                                    ({user.email})
+                                    ({caseworker.email})
                                   </span>
+                                  {!caseworker.canAcceptMore && (
+                                    <Badge variant="secondary" className="text-xs">满载</Badge>
+                                  )}
+                                  {caseworker.activeCases > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {caseworker.activeCases}个案件
+                                    </span>
+                                  )}
                                 </div>
                               </SelectItem>
                             ))}
@@ -386,7 +491,7 @@ export function CaseForm({
                 </div>
 
                 <FileUpload
-                  onFilesUploaded={setUploadedFiles}
+                  onFilesUploaded={handleFilesUploaded}
                   maxFiles={10}
                   className="w-full"
                 />

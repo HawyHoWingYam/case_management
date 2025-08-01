@@ -37,6 +37,7 @@ model Case {
   priority    Priority   @default(MEDIUM)
   created_by  Int
   assigned_to Int?
+  metadata    Json?      // 用于存储文件附件等元数据信息
   created_at  DateTime   @default(now())
   updated_at  DateTime   @updatedAt
 

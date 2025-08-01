@@ -87,7 +87,8 @@ export function FileUpload({
         // 添加到已上传文件列表
         setUploadedFiles(prev => {
           const newFiles = [...prev, response.data]
-          onFilesUploaded(newFiles)
+          // Use setTimeout to avoid setState during render
+          setTimeout(() => onFilesUploaded(newFiles), 0)
           return newFiles
         })
 
@@ -119,7 +120,8 @@ export function FileUpload({
   const removeFile = (fileToRemove: any) => {
     setUploadedFiles(prev => {
       const newFiles = prev.filter(f => f.filename !== fileToRemove.filename)
-      onFilesUploaded(newFiles)
+      // Use setTimeout to avoid setState during render
+      setTimeout(() => onFilesUploaded(newFiles), 0)
       return newFiles
     })
   }
@@ -231,7 +233,7 @@ export function FileUpload({
             <div key={index} className="flex items-center space-x-3 p-3 border rounded-lg bg-muted/25">
               <File className="h-4 w-4 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{file.originalName}</p>
+                <p className="text-sm font-medium truncate">{file.originalname || file.originalName}</p>
                 <p className="text-xs text-muted-foreground">
                   {Math.round(file.size / 1024)} KB
                 </p>

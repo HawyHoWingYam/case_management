@@ -159,7 +159,9 @@ export interface CreateCaseFormData {
   title: string
   description: string
   priority: CasePriority
-  assigned_to_id?: string
+  assigned_to_id?: number  // 修改為 number 類型
+  due_date?: string  // 添加截止日期
+  metadata?: Record<string, any>  // 添加元数据
 }
 
 export interface UpdateCaseFormData {
