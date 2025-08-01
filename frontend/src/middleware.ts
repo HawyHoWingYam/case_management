@@ -32,7 +32,7 @@ const managerRoutes = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  // 获取认证信息（从 cookie 或 localStorage，这里我们检查 cookie）
+  // 获取认证信息（从 cookie）
   const authCookie = request.cookies.get('auth-storage')
   let isAuthenticated = false
   let userRole = null
@@ -40,11 +40,14 @@ export function middleware(request: NextRequest) {
   // 尝试解析认证信息
   if (authCookie) {
     try {
-      const authData = JSON.parse(authCookie.value)
+      // 解码 Cookie 值
+      const decodedValue = decodeURIComponent(authCookie.value)
+      const authData = JSON.parse(decodedValue)
       isAuthenticated = authData.state?.isAuthenticated || false
       userRole = authData.state?.user?.role || null
     } catch (error) {
       // 解析失败，视为未认证
+      console.warn('Failed to parse auth cookie:', error)
       isAuthenticated = false
     }
   }

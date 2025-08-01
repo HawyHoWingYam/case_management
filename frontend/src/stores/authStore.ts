@@ -31,6 +31,20 @@ interface AuthState {
   isManager: () => boolean
 }
 
+// Cookie 操作辅助函数
+const setCookie = (name: string, value: string, days: number = 7) => {
+  if (typeof document !== 'undefined') {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`
+  }
+}
+
+const deleteCookie = (name: string) => {
+  if (typeof document !== 'undefined') {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -42,12 +56,17 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       // 设置用户信息
-      setUser: (user: User) => 
-        set({ user, isAuthenticated: true }),
+      setUser: (user: User) => {
+        const state = { user, isAuthenticated: true }
+        set(state)
+        // 同步到 Cookie
+        setCookie('auth-storage', JSON.stringify({ state }))
+      },
 
       // 设置令牌
-      setToken: (token: string) => 
-        set({ token }),
+      setToken: (token: string) => {
+        set({ token })
+      },
 
       // 设置加载状态
       setLoading: (isLoading: boolean) => 
@@ -58,22 +77,35 @@ export const useAuthStore = create<AuthState>()(
         set({ error }),
 
       // 登录
-      login: (user: User, token: string) => 
-        set({ 
+      login: (user: User, token: string) => {
+        const state = { 
           user, 
           token, 
           isAuthenticated: true, 
           error: null 
-        }),
+        }
+        set(state)
+        // 同步到 Cookie - 只同步认证相关信息
+        setCookie('auth-storage', JSON.stringify({ 
+          state: {
+            user: state.user,
+            token: state.token,
+            isAuthenticated: state.isAuthenticated
+          }
+        }))
+      },
 
       // 登出
-      logout: () => 
+      logout: () => {
         set({ 
           user: null, 
           token: null, 
           isAuthenticated: false, 
           error: null 
-        }),
+        })
+        // 删除 Cookie
+        deleteCookie('auth-storage')
+      },
 
       // 清除错误
       clearError: () => 
@@ -105,6 +137,18 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }), // 只持久化这些字段
+      // 添加 onRehydrateStorage 回调来同步 Cookie
+      onRehydrateStorage: () => (state) => {
+        if (state?.isAuthenticated && state?.user && state?.token) {
+          setCookie('auth-storage', JSON.stringify({ 
+            state: {
+              user: state.user,
+              token: state.token,
+              isAuthenticated: state.isAuthenticated
+            }
+          }))
+        }
+      }
     }
   )
 )
