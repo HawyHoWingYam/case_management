@@ -1,0 +1,237 @@
+# Case Management System - Code Ownership and Review Assignment
+# 
+# This file defines code ownership for automated review assignment based on the multi-agent development approach.
+# Each agent type corresponds to specific areas of expertise and file patterns.
+# 
+# Format: file-pattern @username @team-name
+# Lines starting with # are comments
+# Last matching pattern takes precedence
+
+# =============================================================================
+# DEFAULT REVIEWERS
+# =============================================================================
+# Fallback reviewers for files not covered by specific patterns
+* @devops-lead @tech-lead
+
+# =============================================================================
+# ARCHITECTURE & SYSTEM DESIGN
+# =============================================================================
+# System architecture, technical decisions, and high-level design documents
+/docs/architecture/ @spec-architect @tech-lead
+*.md @spec-architect @tech-lead
+/CLAUDE.md @spec-architect @tech-lead
+/README.md @spec-architect @tech-lead
+
+# API contracts and OpenAPI specifications
+/docs/api/ @spec-architect @api-developer
+**/openapi.yml @spec-architect @api-developer
+**/swagger.yml @spec-architect @api-developer
+
+# =============================================================================
+# DATABASE & DATA LAYER
+# =============================================================================
+# Database schema, migrations, and data-related files
+/backend/prisma/ @database-specialist @api-developer
+**/schema.prisma @database-specialist @api-developer
+**/migrations/ @database-specialist @api-developer
+**/seed.ts @database-specialist @api-developer
+**/seed.js @database-specialist @api-developer
+
+# Database configuration and scripts
+/scripts/db/ @database-specialist @devops-engineer
+**/database*.ts @database-specialist @api-developer
+**/database*.js @database-specialist @api-developer
+
+# =============================================================================
+# BACKEND API & BUSINESS LOGIC
+# =============================================================================
+# NestJS backend application
+/backend/src/ @api-developer @spec-architect
+
+# Controllers and API endpoints
+/backend/src/**/*.controller.ts @api-developer @spec-architect
+/backend/src/**/*.controller.spec.ts @api-developer @qa-engineer
+
+# Services and business logic
+/backend/src/**/*.service.ts @api-developer @spec-architect
+/backend/src/**/*.service.spec.ts @api-developer @qa-engineer
+
+# DTOs and data transfer objects
+/backend/src/**/dto/ @api-developer @spec-architect
+
+# Guards, decorators, and middleware
+/backend/src/**/guards/ @api-developer @spec-architect
+/backend/src/**/decorators/ @api-developer @spec-architect
+/backend/src/**/middleware/ @api-developer @spec-architect
+
+# Authentication and authorization
+/backend/src/auth/ @api-developer @spec-architect
+/backend/src/**/*auth* @api-developer @spec-architect
+
+# Configuration files
+/backend/src/config/ @api-developer @devops-engineer
+
+# =============================================================================
+# FRONTEND & USER INTERFACE
+# =============================================================================
+# Next.js frontend application
+/frontend/src/ @frontend-expert @ui-ux-designer
+
+# React components
+/frontend/src/components/ @frontend-expert @ui-ux-designer
+/frontend/src/**/*.tsx @frontend-expert @ui-ux-designer
+/frontend/src/**/*.jsx @frontend-expert @ui-ux-designer
+
+# Pages and routing
+/frontend/src/app/ @frontend-expert @ui-ux-designer
+/frontend/src/pages/ @frontend-expert @ui-ux-designer
+
+# Styling and design system
+/frontend/src/styles/ @frontend-expert @ui-ux-designer
+/frontend/src/**/*.css @frontend-expert @ui-ux-designer
+/frontend/src/**/*.scss @frontend-expert @ui-ux-designer
+/frontend/tailwind.config.* @frontend-expert @ui-ux-designer
+/frontend/components.json @frontend-expert @ui-ux-designer
+
+# UI components and design tokens
+/frontend/src/components/ui/ @frontend-expert @ui-ux-designer
+/frontend/src/lib/utils.ts @frontend-expert @api-developer
+
+# Hooks and state management
+/frontend/src/hooks/ @frontend-expert @spec-architect
+/frontend/src/lib/ @frontend-expert @api-developer
+
+# =============================================================================
+# TESTING & QUALITY ASSURANCE
+# =============================================================================
+# Test files and configurations
+**/*.test.ts @qa-engineer @api-developer
+**/*.test.tsx @qa-engineer @frontend-expert
+**/*.test.js @qa-engineer @api-developer
+**/*.test.jsx @qa-engineer @frontend-expert
+**/*.spec.ts @qa-engineer @api-developer
+**/*.spec.tsx @qa-engineer @frontend-expert
+
+# E2E tests
+/tests/ @qa-engineer @frontend-expert
+/backend/test/ @qa-engineer @api-developer
+/frontend/cypress/ @qa-engineer @frontend-expert
+/frontend/playwright/ @qa-engineer @frontend-expert
+**/e2e/ @qa-engineer @frontend-expert
+
+# Test configurations
+jest.config.* @qa-engineer @devops-engineer
+cypress.config.* @qa-engineer @devops-engineer
+playwright.config.* @qa-engineer @devops-engineer
+
+# =============================================================================
+# DEVOPS & INFRASTRUCTURE
+# =============================================================================
+# CI/CD pipelines
+/.github/workflows/ @devops-engineer @spec-architect
+/.github/actions/ @devops-engineer @spec-architect
+
+# Docker and containerization
+Dockerfile @devops-engineer @api-developer
+docker-compose*.yml @devops-engineer @spec-architect
+.dockerignore @devops-engineer @api-developer
+
+# Infrastructure as Code
+/terraform/ @devops-engineer @spec-architect
+/infrastructure/ @devops-engineer @spec-architect
+
+# Scripts and automation
+/scripts/ @devops-engineer @spec-architect
+
+# Environment and configuration
+.env* @devops-engineer @api-developer
+*.config.js @devops-engineer @frontend-expert
+*.config.ts @devops-engineer @frontend-expert
+
+# Package management
+package.json @devops-engineer @api-developer
+package-lock.json @devops-engineer @api-developer
+**/package.json @devops-engineer @api-developer
+
+# Linting and formatting
+.eslintrc* @devops-engineer @frontend-expert
+.prettierrc* @devops-engineer @frontend-expert
+.gitignore @devops-engineer @spec-architect
+
+# =============================================================================
+# AUTOMATION & WORKFLOWS
+# =============================================================================
+# n8n automation workflows
+/n8n/ @devops-engineer @product-manager
+/n8n/workflows/ @devops-engineer @product-manager
+
+# n8n deployment scripts
+/scripts/n8n/ @devops-engineer @spec-architect
+
+# =============================================================================
+# PRODUCT & DOCUMENTATION
+# =============================================================================
+# Product requirements and specifications
+/docs/product/ @product-manager @ui-ux-designer
+/project_instruction/ @product-manager @spec-architect
+
+# User documentation
+/docs/user/ @product-manager @ui-ux-designer
+/docs/guides/ @product-manager @frontend-expert
+
+# API documentation
+/docs/api/ @api-developer @spec-architect
+
+# =============================================================================
+# DESIGN & USER EXPERIENCE
+# =============================================================================
+# Design assets and mockups
+/design/ @ui-ux-designer @frontend-expert
+/assets/ @ui-ux-designer @frontend-expert
+/public/images/ @ui-ux-designer @frontend-expert
+/public/icons/ @ui-ux-designer @frontend-expert
+
+# Design system and style guides
+/docs/design/ @ui-ux-designer @frontend-expert
+
+# =============================================================================
+# SECURITY & COMPLIANCE
+# =============================================================================
+# Security configurations and policies
+/security/ @devops-engineer @spec-architect
+**/security*.* @devops-engineer @spec-architect
+
+# =============================================================================
+# CRITICAL FILES - REQUIRE MULTIPLE APPROVALS
+# =============================================================================
+# Critical configuration files require both DevOps and Architecture review
+/package.json @devops-engineer @spec-architect
+/backend/package.json @devops-engineer @api-developer @spec-architect
+/frontend/package.json @devops-engineer @frontend-expert @spec-architect
+
+# Database schema requires multiple specialist reviews
+/backend/prisma/schema.prisma @database-specialist @api-developer @spec-architect
+
+# CI/CD configurations require architecture approval
+/.github/workflows/*.yml @devops-engineer @spec-architect
+/.github/workflows/*.yaml @devops-engineer @spec-architect
+
+# Production environment configurations
+.env.production @devops-engineer @spec-architect @api-developer
+docker-compose.prod.yml @devops-engineer @spec-architect
+
+# =============================================================================
+# AGENT TYPE TEAM MAPPINGS
+# =============================================================================
+# In a real implementation, replace these with actual GitHub usernames/teams:
+#
+# @spec-architect       -> @architecture-team @system-architects
+# @database-specialist  -> @database-team @data-engineers  
+# @api-developer        -> @backend-team @api-developers
+# @frontend-expert      -> @frontend-team @ui-developers
+# @product-manager      -> @product-team @product-owners
+# @qa-engineer          -> @qa-team @test-engineers
+# @devops-engineer      -> @devops-team @infrastructure-engineers
+# @ui-ux-designer       -> @design-team @ux-designers
+# @tech-lead            -> @technical-leads @senior-architects
+# @devops-lead          -> @infrastructure-leads @devops-managers

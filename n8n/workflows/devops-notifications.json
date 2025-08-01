@@ -1,0 +1,555 @@
+{
+  "name": "DevOps Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deployment-notification",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "01f7e2e5-4b8c-4a2f-8d3c-9e1f5a2b3c4d",
+      "name": "Webhook - Deployment",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.type}}",
+              "operation": "equal",
+              "value2": "deployment_success"
+            }
+          ]
+        }
+      },
+      "id": "02f8e3f6-5c9d-4b3f-9e4d-0f2g6b3c5d6e",
+      "name": "Is Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.environment}}",
+              "operation": "equal",
+              "value2": "production"
+            }
+          ]
+        }
+      },
+      "id": "03f9f4g7-6d0e-5c4g-0f5e-1g3h7c4d6e7f",
+      "name": "Is Production?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "content": "🚀 **Deployment Successful** 🚀\n\n**Service:** {{$json.service}}\n**Environment:** {{$json.environment}}\n**Branch:** {{$json.branch}}\n**Commit:** {{$json.commit}}\n**Author:** {{$json.author}}\n\n**Workflow:** {{$json.workflow}}\n**Time:** {{$json.timestamp}}\n\n[View Run]({{$json.run_url}})",
+        "title": "Deployment Success - {{$json.service}} ({{$json.environment}})",
+        "color": "good"
+      },
+      "id": "04g0g5h8-7e1f-6d5h-1g6f-2h4i8d5e7f8g",
+      "name": "Format Success Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [900, 120]
+    },
+    {
+      "parameters": {
+        "content": "🚨 **Deployment Failed** 🚨\n\n**Service:** {{$json.service}}\n**Environment:** {{$json.environment}}\n**Branch:** {{$json.branch}}\n**Commit:** {{$json.commit}}\n**Author:** {{$json.author}}\n\n**Workflow:** {{$json.workflow}}\n**Time:** {{$json.timestamp}}\n\n[View Failure]({{$json.failure_url}})\n\n⚠️ **Action Required:** Please investigate immediately!",
+        "title": "🚨 Deployment Failure - {{$json.service}} ({{$json.environment}})",
+        "color": "danger"
+      },
+      "id": "05h1h6i9-8f2g-7e6i-2h7g-3i5j9e6f8g9h",
+      "name": "Format Failure Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#deployments",
+        "text": "={{$json.title}}",
+        "attachments": [
+          {
+            "color": "={{$json.color}}",
+            "text": "={{$json.content}}"
+          }
+        ]
+      },
+      "id": "06i2i7j0-9g3h-8f7j-3i8h-4j6k0f7g9h0i",
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1120, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credentials-id",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourdomain.com",
+        "toEmail": "ops-team@yourdomain.com",
+        "subject": "={{$json.title}}",
+        "text": "={{$json.content}}"
+      },
+      "id": "07j3j8k1-0h4i-9g8k-4j9i-5k7l1g8h0i1j",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1120, 320],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials-id",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.environment}}",
+              "operation": "equal",
+              "value2": "production"
+            }
+          ]
+        }
+      },
+      "id": "08k4k9l2-1i5j-0h9l-5k0j-6l8m2h9i1j2k",
+      "name": "Production Failure?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 480]
+    },
+    {
+      "parameters": {
+        "channel": "#critical-alerts",
+        "text": "🚨 CRITICAL: Production Deployment Failure",
+        "attachments": [
+          {
+            "color": "danger",
+            "text": "Production deployment has failed for {{$json.service}}. Immediate action required!\n\n**Details:**\n- Service: {{$json.service}}\n- Commit: {{$json.commit}}\n- Author: {{$json.author}}\n- Time: {{$json.timestamp}}\n\n[View Failure]({{$json.failure_url}})"
+          }
+        ]
+      },
+      "id": "09l5l0m3-2j6k-1i0m-6l1k-7m9n3i0j2k3l",
+      "name": "Critical Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [900, 560],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credentials-id",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "recipients": "oncall@yourdomain.com,cto@yourdomain.com",
+        "subject": "🚨 CRITICAL: Production Deployment Failure",
+        "message": "Production deployment has failed for {{$json.service}}.\n\nImmediate investigation required.\n\nService: {{$json.service}}\nCommit: {{$json.commit}}\nAuthor: {{$json.author}}\nTime: {{$json.timestamp}}\n\nFailure Details: {{$json.failure_url}}"
+      },
+      "id": "10m6m1n4-3k7l-2j1n-7m2l-8n0o4j1k3l4m",
+      "name": "Page On-Call",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1120, 560],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials-id",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-notification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11n7n2o5-4l8m-3k2o-8n3m-9o1p5k2l4m5n",
+      "name": "Webhook - Test",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 700]
+    },
+    {
+      "parameters": {
+        "channel": "#devops-test",
+        "text": "🧪 Test Notification",
+        "attachments": [
+          {
+            "color": "good",
+            "text": "This is a test notification from the DevOps automation system.\n\n**Environment:** {{$json.environment}}\n**Message:** {{$json.custom_message}}\n**Triggered by:** {{$json.triggered_by}}\n**Time:** {{$json.timestamp}}"
+          }
+        ]
+      },
+      "id": "12o8o3p6-5m9n-4l3p-9o4n-0p2q6l3m5n6o",
+      "name": "Send Test to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [460, 700],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credentials-id",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "performance-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "13p9p4q7-6n0o-5m4q-0p5o-1q3r7m4n6o7p",
+      "name": "Webhook - Performance",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.alert_level}}",
+              "operation": "equal",
+              "value2": "critical"
+            }
+          ]
+        }
+      },
+      "id": "14q0q5r8-7o1p-6n5r-1q6p-2r4s8n5o7p8q",
+      "name": "Critical Performance?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 900]
+    },
+    {
+      "parameters": {
+        "channel": "#performance-alerts",
+        "text": "⚡ Performance Alert - {{$json.environment}}",
+        "attachments": [
+          {
+            "color": "warning",
+            "text": "Performance degradation detected:\n\n**Environment:** {{$json.environment}}\n**Response Time:** {{$json.metrics.response_time}}\n**Error Rate:** {{$json.metrics.error_rate}}\n**Throughput:** {{$json.metrics.throughput}}\n\n**Message:** {{$json.message}}\n**Time:** {{$json.timestamp}}"
+          }
+        ]
+      },
+      "id": "15r1r6s9-8p2q-7o6s-2r7q-3s5t9o6p8q9r",
+      "name": "Performance Alert Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [680, 800],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credentials-id",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#critical-alerts",
+        "text": "🔥 CRITICAL Performance Issue",
+        "attachments": [
+          {
+            "color": "danger",
+            "text": "Critical performance degradation detected!\n\n**Environment:** {{$json.environment}}\n**Alert Level:** {{$json.alert_level}}\n**Metrics:**\n- Response Time: {{$json.metrics.response_time}}\n- Error Rate: {{$json.metrics.error_rate}}\n- Throughput: {{$json.metrics.throughput}}\n\n**Message:** {{$json.message}}\n**Time:** {{$json.timestamp}}\n\n⚠️ **Immediate attention required!**"
+          }
+        ]
+      },
+      "id": "16s2s7t0-9q3r-8p7t-3s8r-4t6u0p7q9r0s",
+      "name": "Critical Performance Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [680, 1000],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credentials-id",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "workflow-monitoring",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "17t3t8u1-0r4s-9q8u-4t9s-5u7v1q8r0s1t",
+      "name": "Webhook - Monitoring",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 1200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "workflow_metrics",
+        "columns": "event_type, repository, actor, jobs_status, timestamp",
+        "additionalFields": {
+          "values": "={{$json.event_type}}, {{$json.repository}}, {{$json.actor}}, {{JSON.stringify($json.jobs_status)}}, {{$json.timestamp}}"
+        }
+      },
+      "id": "18u4u9v2-1s5t-0r9v-5u0t-6v8w2r9s1t2u",
+      "name": "Store Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [460, 1200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials-id",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "responseBody": "{\"status\": \"success\", \"message\": \"Notification processed\"}",
+        "options": {}
+      },
+      "id": "19v5v0w3-2t6u-1s0w-6v1u-7w9x3s0t2u3v",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "responseBody": "{\"status\": \"success\", \"message\": \"Critical alert sent\"}",
+        "options": {}
+      },
+      "id": "20w6w1x4-3u7v-2t1x-7w2v-8x0y4t1u3v4w",
+      "name": "Response Critical",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 560]
+    }
+  ],
+  "connections": {
+    "Webhook - Deployment": {
+      "main": [
+        [
+          {
+            "node": "Is Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Success?": {
+      "main": [
+        [
+          {
+            "node": "Is Production?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Production Failure?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Production?": {
+      "main": [
+        [
+          {
+            "node": "Format Success Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Success Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Success Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Failure Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Production Failure?": {
+      "main": [
+        [
+          {
+            "node": "Critical Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Failure Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Critical Alert": {
+      "main": [
+        [
+          {
+            "node": "Page On-Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Slack": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Page On-Call": {
+      "main": [
+        [
+          {
+            "node": "Response Critical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Test": {
+      "main": [
+        [
+          {
+            "node": "Send Test to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Performance": {
+      "main": [
+        [
+          {
+            "node": "Critical Performance?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Critical Performance?": {
+      "main": [
+        [
+          {
+            "node": "Critical Performance Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Performance Alert Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Monitoring": {
+      "main": [
+        [
+          {
+            "node": "Store Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "UTC"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "devops",
+      "name": "DevOps"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "notifications",
+      "name": "Notifications"
+    }
+  ]
+}

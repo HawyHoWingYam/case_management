@@ -1,0 +1,47 @@
+2025-08-01 08:51:24 - Starting development environment setup...
+2025-08-01 08:51:24 - Project root: /Users/hawyho/Documents/GitHub/case_management
+[0;35m🚀 Checking system requirements...[0m
+[0;32m✅ Node.js 22.13.0 (requirement: 18+)[0m
+[0;32m✅ npm 11.4.1[0m
+[0;32m✅ PostgreSQL 17.5[0m
+[0;32m✅ Git 2.39.5[0m
+[0;32m✅ Docker 27.4.0 (optional)[0m
+[0;32m✅ Docker Compose version (optional)[0m
+[0;32m✅ All system requirements met![0m
+[0;35m🚀 Setting up environment files...[0m
+[0;34mℹ️  Backend .env already exists[0m
+[0;34mℹ️  Frontend .env.local already exists[0m
+[0;35m🚀 Installing backend dependencies...[0m
+[0;34mℹ️  Installing Node.js dependencies...[0m
+[0;32m✅ Backend dependencies installed[0m
+[0;34mℹ️  Generating Prisma client...[0m
+[0;32m✅ Prisma client generated[0m
+[0;35m🚀 Setting up PostgreSQL database...[0m
+[0;32m✅ PostgreSQL is running[0m
+[0;32m✅ Prisma client generated[0m
+[0;34mℹ️  Running database migrations...[0m
+[1;33m⚠️  Database migrations failed. You may need to run them manually.[0m
+[0;34mℹ️  Run: cd backend && npm run prisma:migrate[0m
+[0;34mℹ️  Seeding database with demo data...[0m
+[1;33m⚠️  Database seeding failed. You may need to run it manually.[0m
+[0;34mℹ️  Run: cd backend && npm run seed[0m
+[0;35m🚀 Installing frontend dependencies...[0m
+[0;34mℹ️  Installing Node.js dependencies...[0m
+[0;32m✅ Frontend dependencies installed[0m
+[0;35m🚀 Setting up development tools...[0m
+[0;32m✅ Made scripts executable[0m
+[0;34mℹ️  Development aliases created in .dev-aliases[0m
+[0;34mℹ️  Source with: source .dev-aliases[0m
+[0;32m✅ VSCode settings created[0m
+[0;32m✅ VSCode recommended extensions configured[0m
+[0;35m🚀 Running comprehensive health checks...[0m
+[0;34mℹ️  Checking backend service...[0m
+[0;31m❌ Backend service: FAILED[0m
+[0;34mℹ️  Checking frontend build...[0m
+[0;32m✅ Frontend build: OK[0m
+[0;34mℹ️  Checking database connection...[0m
+[0;32m✅ Database connection: OK[0m
+[1;33m⚠️  Some components failed to start properly[0m
+[0;34mℹ️  Check the log file: /Users/hawyho/Documents/GitHub/case_management/logs/dev-setup.log[0m
+[0;34mℹ️  Run health checks manually with the commands shown above[0m
+2025-08-01 08:53:58 - Development environment setup completed with issues

@@ -1,0 +1,10 @@
+# Case Management System Development Aliases
+alias cms-start='make dev-start'
+alias cms-stop='make dev-stop'
+alias cms-test='make test-all'
+alias cms-clean='make clean-all'
+alias cms-logs='make logs'
+alias cms-db='npm run prisma:studio --prefix backend'
+alias cms-backend='cd backend && npm run start:dev'
+alias cms-frontend='cd frontend && npm run dev'
+alias cms-health='curl -s http://localhost:3001/api/health | jq'

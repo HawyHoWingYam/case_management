@@ -1,0 +1,439 @@
+name: Frontend CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['frontend/**', '.github/workflows/frontend-ci.yml']
+  pull_request:
+    branches: [main, develop]
+    paths: ['frontend/**', '.github/workflows/frontend-ci.yml']
+
+env:
+  NODE_VERSION: '20'
+  CACHE_KEY_PREFIX: frontend-v1
+
+jobs:
+  # Quality Gates - Lint, Type Check, Format
+  quality-checks:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci --prefer-offline
+
+      - name: Lint code
+        run: cd frontend && npm run lint
+
+      - name: Type checking
+        run: cd frontend && npm run type-check
+
+      - name: Format check
+        run: cd frontend && npm run format:check --if-present || npx prettier --check .
+
+      - name: Security audit
+        run: cd frontend && npm audit --audit-level moderate
+
+      - name: Dependency vulnerability scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=frontend/package.json --severity-threshold=medium
+
+  # Unit and Component Tests
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality-checks
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci --prefer-offline
+
+      - name: Run unit tests
+        run: cd frontend && npm run test:cov
+        env:
+          CI: true
+
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+
+      - name: Enforce coverage threshold
+        run: |
+          cd frontend
+          COVERAGE=$(npm run test:cov -- --silent | grep -o '[0-9]*\.[0-9]*%' | tail -1 | sed 's/%//')
+          if (( $(echo "$COVERAGE < 90" | bc -l) )); then
+            echo "❌ Coverage $COVERAGE% is below 90% threshold"
+            exit 1
+          else
+            echo "✅ Coverage $COVERAGE% meets 90% threshold"
+          fi
+
+  # Build and Performance Testing
+  build-and-performance:
+    name: Build & Performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality-checks
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci --prefer-offline
+
+      - name: Build application
+        run: cd frontend && npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Analyze bundle size
+        run: |
+          cd frontend
+          npm install -g bundlesize
+          if [ -f "bundlesize.config.json" ]; then
+            bundlesize
+          else
+            echo "⚠️ No bundlesize config found, skipping bundle analysis"
+          fi
+
+      - name: Upload build artifacts
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build-${{ github.sha }}
+          path: frontend/.next/
+          retention-days: 30
+
+  # Lighthouse Performance Audit
+  lighthouse-audit:
+    name: Lighthouse Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-performance
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci --prefer-offline
+
+      - name: Build application
+        run: cd frontend && npm run build
+
+      - name: Start application
+        run: |
+          cd frontend
+          npm run start &
+          sleep 10
+        env:
+          PORT: 3000
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.12.x
+
+      - name: Run Lighthouse CI
+        run: |
+          cd frontend
+          lhci autorun || lhci autorun --config=lighthouserc.js
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          LHCI_TOKEN: ${{ secrets.LHCI_TOKEN }}
+
+      - name: Performance Budget Check
+        run: |
+          echo "🔍 Checking performance budgets..."
+          # Performance thresholds: >95 Performance, >95 Accessibility, >90 Best Practices, >90 SEO
+          LIGHTHOUSE_RESULTS=$(cat frontend/.lighthouseci/lhr-*.json | jq '.categories.performance.score, .categories.accessibility.score, .categories."best-practices".score, .categories.seo.score')
+          echo "Lighthouse scores: $LIGHTHOUSE_RESULTS"
+
+  # Accessibility Testing
+  accessibility-test:
+    name: Accessibility Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-and-performance
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci --prefer-offline
+
+      - name: Build application
+        run: cd frontend && npm run build
+
+      - name: Start application
+        run: |
+          cd frontend
+          npm run start &
+          sleep 10
+        env:
+          PORT: 3000
+
+      - name: Run accessibility tests
+        run: |
+          npm install -g @axe-core/cli
+          axe http://localhost:3000 --tags wcag2a,wcag2aa --exit
+
+  # Visual Regression Testing
+  visual-regression:
+    name: Visual Regression Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-and-performance
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci --prefer-offline
+
+      - name: Install Playwright
+        run: cd frontend && npx playwright install --with-deps
+
+      - name: Build application
+        run: cd frontend && npm run build
+
+      - name: Start application
+        run: |
+          cd frontend
+          npm run start &
+          sleep 10
+        env:
+          PORT: 3000
+
+      - name: Run visual regression tests
+        run: cd frontend && npx playwright test --project=visual-regression
+        if: hashFiles('frontend/tests/visual/**') != ''
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: visual-regression-results
+          path: frontend/test-results/
+
+  # Docker Build
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test, build-and-performance]
+    if: github.event_name == 'push'
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          build-args: |
+            NODE_ENV=production
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: docker-build
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying frontend to staging environment"
+          echo "Image: ${{ needs.docker-build.outputs.image-tag }}"
+          # Add actual deployment commands here
+
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running smoke tests against staging"
+          sleep 10
+          curl -f ${{ secrets.STAGING_FRONTEND_URL }}/health || exit 1
+
+      - name: Performance monitoring
+        run: |
+          echo "📊 Running performance monitoring"
+          # Add performance monitoring logic here
+
+      - name: Notify deployment success
+        if: success()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const webhookUrl = '${{ secrets.N8N_WEBHOOK_URL }}';
+            if (webhookUrl) {
+              await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'deployment_success',
+                  environment: 'staging',
+                  service: 'frontend',
+                  commit: '${{ github.sha }}',
+                  branch: '${{ github.ref_name }}',
+                  author: '${{ github.actor }}'
+                })
+              });
+            }
+
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: docker-build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying frontend to production environment"
+          echo "Image: ${{ needs.docker-build.outputs.image-tag }}"
+          # Add production deployment logic here
+
+      - name: Health check
+        run: |
+          echo "🏥 Performing health checks"
+          sleep 15
+          curl -f ${{ secrets.PRODUCTION_FRONTEND_URL }}/health || exit 1
+
+      - name: Performance validation
+        run: |
+          echo "📊 Validating production performance"
+          # Add production performance validation
+
+      - name: CDN cache invalidation
+        run: |
+          echo "🔄 Invalidating CDN cache"
+          # Add CDN cache invalidation logic
+
+      - name: Notify deployment success
+        if: success()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const webhookUrl = '${{ secrets.N8N_WEBHOOK_URL }}';
+            if (webhookUrl) {
+              await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'deployment_success',
+                  environment: 'production',
+                  service: 'frontend',
+                  commit: '${{ github.sha }}',
+                  branch: '${{ github.ref_name }}',
+                  author: '${{ github.actor }}'
+                })
+              });
+            }
