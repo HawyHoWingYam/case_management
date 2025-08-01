@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Layout from '@/components/layout/Layout'
+import { Toaster } from '@/components/ui/sonner'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,6 +21,7 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={inter.className}>
         <Layout>{children}</Layout>
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   )
