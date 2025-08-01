@@ -6,8 +6,8 @@ services:
     container_name: case_management_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: case_user
-      POSTGRES_PASSWORD: case_password
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
       POSTGRES_DB: case_management_db
     ports:
       - "5432:5432"

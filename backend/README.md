@@ -1,198 +1,98 @@
-# Case Management System - Backend API
+<p align="center">
+  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+</p>
 
-NestJS backend API for the Case Management System with n8n workflow integration.
+[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
+[circleci-url]: https://circleci.com/gh/nestjs/nest
 
-## Features
+  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+    <p align="center">
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
+<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
+<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
+<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
+<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
+  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
+    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
+  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+</p>
+  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
+  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-- **Health Check System**: Basic and detailed health monitoring endpoints
-- **n8n Integration**: Webhook endpoints for workflow automation
-- **Database Integration**: PostgreSQL with Prisma ORM
-- **Security**: Helmet, CORS, rate limiting, input validation
-- **Comprehensive Logging**: Winston-based logging with different levels
-- **Error Handling**: Global exception filters with structured error responses
-- **API Documentation**: Swagger/OpenAPI documentation
-- **Testing**: Unit and integration tests with Jest
+## Description
 
-## Quick Start
+[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL database
-- n8n instance (for webhook integration)
-
-### Installation
-
-```bash
-# Install dependencies
-npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Edit .env with your database and n8n settings
-# DATABASE_URL="postgresql://username:password@localhost:5432/case_management"
-# N8N_WEBHOOK_URL="http://localhost:5678/webhook/case-management-test"
-```
-
-### Database Setup
+## Project setup
 
 ```bash
-# Generate Prisma client
-npm run prisma:generate
-
-# Run database migrations
-npm run prisma:migrate
-
-# Seed the database with demo data
-npm run seed
+$ npm install
 ```
 
-### Development
+## Compile and run the project
 
 ```bash
-# Start development server
-npm run start:dev
+# development
+$ npm run start
 
-# Run tests
-npm run test
+# watch mode
+$ npm run start:dev
 
-# Run e2e tests
-npm run test:e2e
-
-# Run tests with coverage
-npm run test:cov
+# production mode
+$ npm run start:prod
 ```
 
-## API Endpoints
-
-### Application
-- `GET /api` - Application information
-
-### Health Check
-- `GET /api/health` - Basic health check
-- `GET /api/health/detailed` - Detailed health with database and memory info
-
-### Webhooks
-- `POST /api/n8n-test` - Test n8n integration
-
-### API Documentation
-- `GET /api/docs` - Swagger/OpenAPI documentation (development only)
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment (development/production/test) | development |
-| `PORT` | Server port | 3001 |
-| `DATABASE_URL` | PostgreSQL connection string | Required |
-| `JWT_SECRET` | JWT signing secret | Required |
-| `JWT_EXPIRES_IN` | JWT expiration time | 1d |
-| `N8N_WEBHOOK_URL` | n8n webhook endpoint | Required |
-| `CORS_ORIGIN` | CORS allowed origin | http://localhost:3000 |
-| `LOG_LEVEL` | Logging level | info |
-| `THROTTLE_TTL` | Rate limit window (seconds) | 60 |
-| `THROTTLE_LIMIT` | Rate limit max requests | 100 |
-
-## Project Structure
-
-```
-src/
-├── common/           # Shared utilities, DTOs, filters
-├── config/           # Configuration files
-├── health/           # Health check module
-├── webhooks/         # n8n webhook integration
-├── prisma/           # Database service
-├── app.module.ts     # Main application module
-└── main.ts           # Application bootstrap
-
-prisma/
-├── schema.prisma     # Database schema
-├── migrations/       # Database migrations
-└── seed.ts           # Database seeding
-
-test/
-├── unit/             # Unit tests
-├── integration/      # Integration tests
-└── e2e/              # End-to-end tests
-```
-
-## Database Schema
-
-The system includes these main entities:
-
-- **User**: System users with roles (CLERK, CHAIR, CASEWORKER)
-- **Case**: Case management with workflow status
-- **CaseLog**: Audit trail for all case activities
-
-## Testing
+## Run tests
 
 ```bash
-# Unit tests
-npm run test
+# unit tests
+$ npm run test
 
-# Watch mode
-npm run test:watch
+# e2e tests
+$ npm run test:e2e
 
-# Coverage report
-npm run test:cov
-
-# E2E tests
-npm run test:e2e
-
-# Debug tests
-npm run test:debug
+# test coverage
+$ npm run test:cov
 ```
 
-## Production Deployment
+## Deployment
 
-1. Set `NODE_ENV=production`
-2. Configure production database
-3. Set secure `JWT_SECRET`
-4. Configure production `N8N_WEBHOOK_URL`
-5. Run migrations: `npm run prisma:deploy`
-6. Build application: `npm run build`
-7. Start production server: `npm run start:prod`
+When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
-## Security Features
+If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
-- Helmet for security headers
-- CORS configuration
-- Rate limiting (100 requests/minute by default)
-- Input validation with class-validator
-- Password hashing with bcrypt
-- JWT authentication (ready for implementation)
-- Global exception handling
+```bash
+$ npm install -g @nestjs/mau
+$ mau deploy
+```
 
-## Logging
+With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
-The application uses Winston for structured logging:
+## Resources
 
-- **Console**: Colorized output for development
-- **File**: JSON logs for production (error.log, combined.log)
-- **Levels**: error, warn, info, debug, verbose
+Check out a few resources that may come in handy when working with NestJS:
 
-## n8n Integration
+- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
+- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
+- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
+- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
+- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
+- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
+- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
+- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
 
-The system includes webhook endpoints for n8n workflow automation:
+## Support
 
-- Test webhook endpoint for integration verification
-- Business event webhooks for case lifecycle events
-- Non-blocking webhook delivery with error handling
-- Health check for webhook service connectivity
+Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
 
-## Development
+## Stay in touch
 
-This backend follows NestJS best practices:
-
-- Modular architecture
-- Dependency injection
-- TypeScript strict mode
-- Comprehensive error handling
-- Global pipes and filters
-- OpenAPI documentation
-- Test-driven development
+- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+- Website - [https://nestjs.com](https://nestjs.com/)
+- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
-Private - Case Management System
+Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
