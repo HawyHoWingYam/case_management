@@ -15,6 +15,12 @@ import {
 } from '@/types/dashboard'
 import { API_ENDPOINTS } from '@/types/api'
 
+// Auth types
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
 // 创建 axios 实例
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
@@ -107,9 +113,10 @@ export const apiClient = {
     },
 
     // 获取案件详情
-    getById: async (id: number): Promise<CaseDetailResponse> => {
-      const response: AxiosResponse<CaseDetailResponse> = await api.get(API_ENDPOINTS.CASES.DETAIL(id))
-      return response.data
+    getById: async (id: number): Promise<{ data: Case }> => {
+      const response: AxiosResponse<Case> = await api.get(API_ENDPOINTS.CASES.DETAIL(id))
+      // Backend returns case object directly, wrap it in data property for consistency
+      return { data: response.data }
     },
 
     // 创建案件
@@ -224,9 +231,10 @@ export const apiClient = {
   // ==================== 认证相关 API ====================
   auth: {
     // 登录
-    login: async (credentials: { username: string; password: string }): Promise<{ data: { access_token: string; user: any } }> => {
-      const response: AxiosResponse<{ data: { access_token: string; user: any } }> = await api.post(API_ENDPOINTS.AUTH.LOGIN, credentials)
-      return response.data
+    login: async (credentials: LoginRequest): Promise<{ data: { access_token: string; user: any } }> => {
+      const response: AxiosResponse<{ access_token: string; user: any }> = await api.post(API_ENDPOINTS.AUTH.LOGIN, credentials)
+      // Backend returns { access_token, user } directly, wrap it in data property for consistency
+      return { data: response.data }
     },
 
     // 登出
