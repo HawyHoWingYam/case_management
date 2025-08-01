@@ -20,8 +20,21 @@ async function bootstrap() {
     .setTitle('Case Management System API')
     .setDescription('API documentation for the Case Management System')
     .setVersion('1.0')
+    .addTag('系统信息')
+    .addTag('认证')
     .addTag('cases')
     .addTag('users')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth', // This name here is important for matching up with @ApiBearerAuth() in your controller!
+    )
     .build();
   
   const document = SwaggerModule.createDocument(app, config);
@@ -30,8 +43,9 @@ async function bootstrap() {
   // 设置全局 API 前缀
   app.setGlobalPrefix('api');
   
-  await app.listen(3001); // 使用 3001 端口，避免与前端冲突
-  console.log('🚀 Backend server is running on http://localhost:3001');
-  console.log('📚 API documentation available at http://localhost:3001/api/docs');
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  console.log(`🚀 Backend server is running on http://localhost:${port}`);
+  console.log(`📚 API documentation available at http://localhost:${port}/api/docs`);
 }
 bootstrap();
