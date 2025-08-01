@@ -22,8 +22,9 @@ model User {
   updated_at DateTime @updatedAt
 
   // 关系：用户可以有多个案例
-  cases      Case[]
-  case_logs  CaseLog[]
+  cases          Case[] @relation("CaseCreator")      // 用户创建的案件
+  assigned_cases Case[] @relation("CaseAssignee")     // 分配给用户的案件 ✅ 新增
+  case_logs      CaseLog[]
 
   @@map("users")
 }
@@ -40,7 +41,8 @@ model Case {
   updated_at  DateTime   @updatedAt
 
   // 关系
-  creator     User      @relation(fields: [created_by], references: [user_id])
+  creator     User      @relation("CaseCreator", fields: [created_by], references: [user_id])
+  assignee    User?     @relation("CaseAssignee", fields: [assigned_to], references: [user_id]) // ✅ 新增
   case_logs   CaseLog[]
 
   @@map("cases")

@@ -52,6 +52,17 @@ export interface CaseFilters {
   search?: string  // 添加搜索字段
 }
 
+// 案件查询参数类型 (用于URL参数和API查询)
+export interface CaseQueryParams {
+  view?: string
+  status?: CaseStatus
+  priority?: CasePriority
+  assignedTo?: number
+  search?: string
+  page?: number
+  limit?: number
+}
+
 // 案件狀態配置
 export const CASE_STATUS_CONFIG = {
   OPEN: {

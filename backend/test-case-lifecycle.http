@@ -1,0 +1,167 @@
+### 案件生命周期 API 測試文件
+### 請將此文件保存為 /backend/test-case-lifecycle.http
+
+### 變數設定 - 請替換為您的實際 JWT token
+@baseUrl = http://localhost:3001/api
+@adminToken = YOUR_ADMIN_JWT_TOKEN_HERE
+@managerToken = YOUR_MANAGER_JWT_TOKEN_HERE  
+@userToken = YOUR_USER_JWT_TOKEN_HERE
+
+### 1. 獲取可指派的 Caseworker 列表 (Chair 功能)
+GET {{baseUrl}}/cases/available-caseworkers
+Authorization: Bearer {{adminToken}}
+
+###
+
+### 2. 創建一個測試案件 (用於後續測試)
+POST {{baseUrl}}/cases
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "測試案件 - 系統登錄問題",
+  "description": "這是用於測試案件指派流程的測試案件",
+  "priority": "MEDIUM"
+}
+
+###
+
+### 3. 查看所有 OPEN 狀態的案件 (Chair 查看待指派案件)
+GET {{baseUrl}}/cases?view=all&status=OPEN
+Authorization: Bearer {{adminToken}}
+
+###
+
+### 4. Chair 指派案件 (替換案件ID和用戶ID為實際值)
+PATCH {{baseUrl}}/cases/1/assign
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "assignedCaseworkerId": 2
+}
+
+###
+
+### 5. 驗證案件狀態已變更為 PENDING
+GET {{baseUrl}}/cases/1
+Authorization: Bearer {{adminToken}}
+
+###
+
+### 6. Caseworker 查看指派給自己的案件
+GET {{baseUrl}}/cases?view=assigned&status=PENDING
+Authorization: Bearer {{userToken}}
+
+###
+
+### 7. Caseworker 接受案件
+PATCH {{baseUrl}}/cases/1/accept
+Authorization: Bearer {{userToken}}
+
+###
+
+### 8. 驗證案件狀態已變更為 IN_PROGRESS
+GET {{baseUrl}}/cases/1
+Authorization: Bearer {{userToken}}
+
+###
+
+### 9. 創建另一個測試案件用於拒絕測試
+POST {{baseUrl}}/cases
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "測試案件2 - 系統更新問題", 
+  "description": "這是用於測試案件拒絕流程的測試案件",
+  "priority": "HIGH"
+}
+
+###
+
+### 10. Chair 指派第二個案件
+PATCH {{baseUrl}}/cases/2/assign
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "assignedCaseworkerId": 2
+}
+
+###
+
+### 11. Caseworker 拒絕案件
+PATCH {{baseUrl}}/cases/2/reject
+Authorization: Bearer {{userToken}}
+
+###
+
+### 12. 驗證被拒絕的案件狀態已回到 OPEN
+GET {{baseUrl}}/cases/2
+Authorization: Bearer {{adminToken}}
+
+###
+
+### 13. 測試業務規則：嘗試指派給已有5個案件的 Caseworker (應該失敗)
+### 注意：此測試需要先為某個 Caseworker 創建5個 IN_PROGRESS 狀態的案件
+POST {{baseUrl}}/cases
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "測試案件3 - 業務規則測試",
+  "description": "用於測試5案件上限的案件"
+}
+
+###
+
+PATCH {{baseUrl}}/cases/3/assign
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "assignedCaseworkerId": 2
+}
+
+###
+
+### 14. 測試權限：USER 嘗試指派案件 (應該失敗)
+PATCH {{baseUrl}}/cases/1/assign
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "assignedCaseworkerId": 3
+}
+
+###
+
+### 15. 測試權限：嘗試接受未指派給自己的案件 (應該失敗)
+PATCH {{baseUrl}}/cases/1/accept
+Authorization: Bearer {{userToken}}
+
+###
+
+### 16. 測試狀態限制：嘗試指派非 OPEN 狀態的案件 (應該失敗)
+PATCH {{baseUrl}}/cases/1/assign
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "assignedCaseworkerId": 3
+}
+
+###
+
+### 17. 獲取案件統計信息（查看變化）
+GET {{baseUrl}}/cases/stats
+Authorization: Bearer {{adminToken}}
+
+###
+
+### 18. 查看案件操作日誌（應該包含所有指派、接受、拒絕操作）
+GET {{baseUrl}}/cases/1
+Authorization: Bearer {{adminToken}}
+
+###
