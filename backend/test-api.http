@@ -1,0 +1,127 @@
+###
+# Case Management System API 测试
+# 使用 REST Client 插件 (VS Code) 或 Postman 运行这些测试
+###
+
+@baseUrl = http://localhost:3001
+@adminToken = {{login_admin.response.body.access_token}}
+@managerToken = {{login_manager.response.body.access_token}}
+@userToken = {{login_user.response.body.access_token}}
+
+### 1. 健康检查
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+### 2. 系统信息
+GET {{baseUrl}}/
+Content-Type: application/json
+
+### 3. 管理员登录
+# @name login_admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "password123"
+}
+
+### 4. 经理登录  
+# @name login_manager
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "manager@example.com", 
+  "password": "password123"
+}
+
+### 5. 普通用户登录
+# @name login_user
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+
+### 6. 获取用户信息 (使用管理员token)
+GET {{baseUrl}}/auth/profile
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 7. 创建新案件 (使用普通用户token)
+POST {{baseUrl}}/cases
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "title": "测试案件 - API创建",
+  "description": "这是通过API创建的测试案件，用于验证系统功能",
+  "priority": "HIGH"
+}
+
+### 8. 获取案件列表 (使用管理员token - 能看到所有案件)
+GET {{baseUrl}}/cases
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 9. 获取案件列表 (使用普通用户token - 只能看到自己相关的案件)
+GET {{baseUrl}}/cases
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+### 10. 获取特定案件详情 (使用第一个种子案件的ID)
+GET {{baseUrl}}/cases/00000000-0000-0000-0000-000000000001
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 11. 更新案件状态
+PATCH {{baseUrl}}/cases/00000000-0000-0000-0000-000000000001
+Authorization: Bearer {{managerToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS",
+  "description": "案件已开始处理，正在调查客户反馈的问题"
+}
+
+### 12. 文件上传测试 (单文件)
+POST {{baseUrl}}/files/upload
+Authorization: Bearer {{userToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+This is a test file for case management system.
+Created on: 2025-08-01
+Purpose: API Testing
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 13. 获取文件信息 (需要替换为实际的文件名)
+GET {{baseUrl}}/files/{{filename}}/info
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+### 14. 获取文件下载链接
+GET {{baseUrl}}/files/{{filename}}/download-url
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+### 15. 测试权限 - 普通用户尝试访问不属于自己的案件 (应该失败)
+GET {{baseUrl}}/cases/00000000-0000-0000-0000-000000000002
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+### 16. 测试无效认证 (应该失败)
+GET {{baseUrl}}/cases
+Authorization: Bearer invalid-token
+Content-Type: application/json
+
+### 17. 删除案件 (仅管理员权限)
+DELETE {{baseUrl}}/cases/00000000-0000-0000-0000-000000000003
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
