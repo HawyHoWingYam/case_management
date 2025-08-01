@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id    Int      @id @default(autoincrement())
+  username   String   @unique @db.VarChar(50)
+  email      String   @unique @db.VarChar(100)
+  password   String   @db.VarChar(255)
+  role       UserRole @default(USER)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // 关系：用户可以有多个案例
+  cases      Case[]
+  case_logs  CaseLog[]
+
+  @@map("users")
+}
+
+model Case {
+  case_id     Int        @id @default(autoincrement())
+  title       String     @db.VarChar(200)
+  description String?    @db.Text
+  status      CaseStatus @default(OPEN)
+  priority    Priority   @default(MEDIUM)
+  created_by  Int
+  assigned_to Int?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  // 关系
+  creator     User      @relation(fields: [created_by], references: [user_id])
+  case_logs   CaseLog[]
+
+  @@map("cases")
+}
+
+model CaseLog {
+  log_id     Int      @id @default(autoincrement())
+  case_id    Int
+  user_id    Int
+  action     String   @db.VarChar(100)
+  details    String?  @db.Text
+  created_at DateTime @default(now())
+
+  // 关系
+  case Case @relation(fields: [case_id], references: [case_id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@map("case_logs")
+}
+
+// 枚举类型
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum CaseStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
