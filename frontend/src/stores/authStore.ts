@@ -78,6 +78,12 @@ export const useAuthStore = create<AuthState>()(
 
       // 登录
       login: (user: User, token: string) => {
+        console.log('🔐 [AuthStore] Login action:', {
+          userId: user.user_id,
+          username: user.username,
+          role: user.role,
+          hasToken: !!token
+        })
         const state = { 
           user, 
           token, 
@@ -97,6 +103,7 @@ export const useAuthStore = create<AuthState>()(
 
       // 登出
       logout: () => {
+        console.log('🔐 [AuthStore] Logout action')
         set({ 
           user: null, 
           token: null, 

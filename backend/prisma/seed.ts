@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -22,35 +22,35 @@ async function main() {
       username: 'admin',
       email: 'admin@example.com',
       password: await hashPassword('admin123'),
-      role: UserRole.ADMIN,
+      role: Role.ADMIN,
       is_active: true,
     },
     {
       username: 'manager',
       email: 'manager@example.com',
       password: await hashPassword('manager123'),
-      role: UserRole.MANAGER,
+      role: Role.MANAGER,
       is_active: true,
     },
     {
       username: 'user1',
       email: 'user1@example.com',
       password: await hashPassword('user123'),
-      role: UserRole.USER,
+      role: Role.USER,
       is_active: true,
     },
     {
       username: 'user2',
       email: 'user2@example.com',
       password: await hashPassword('user123'),
-      role: UserRole.USER,
+      role: Role.USER,
       is_active: true,
     },
     {
       username: 'clerk',
       email: 'clerk@example.com',
       password: await hashPassword('clerk123'),
-      role: UserRole.USER, // 假设 Clerk 使用 USER 角色，您可能需要添加 CLERK 角色
+      role: Role.USER, // 假设 Clerk 使用 USER 角色，您可能需要添加 CLERK 角色
       is_active: true,
     },
   ];

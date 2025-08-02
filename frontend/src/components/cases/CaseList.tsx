@@ -12,7 +12,7 @@ import Link from 'next/link'
 
 import { CaseQueryParams, Case } from '@/types/case'
 import { CaseStatusBadge } from './CaseStatusBadge'
-import { apiClient } from '@/lib/api'
+import { useCases } from '@/hooks/useCases'  // 使用新的hook
 
 interface CaseListProps {
   initialFilters?: Partial<CaseQueryParams>
@@ -20,36 +20,24 @@ interface CaseListProps {
 }
 
 export function CaseList({ initialFilters = {}, className }: CaseListProps) {
-  const [cases, setCases] = useState<Case[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
   const [filters, setFilters] = useState<Partial<CaseQueryParams>>(initialFilters)
   const [searchTerm, setSearchTerm] = useState('')
 
-  const fetchCases = async () => {
-    try {
-      setIsLoading(true)
-      setIsError(false)
-      
-      const queryParams = { ...filters }
-      if (searchTerm) {
-        queryParams.search = searchTerm
-      }
-      
-      const response = await apiClient.cases.getAll(queryParams)
-      setCases(response.data || [])
-    } catch (error) {
-      console.error('Failed to fetch cases:', error)
-      setIsError(true)
-      setCases([])
-    } finally {
-      setIsLoading(false)
-    }
+  // 使用新的useCases hook
+  const queryParams = {
+    ...filters,
+    search: searchTerm || undefined,
   }
 
-  useEffect(() => {
-    fetchCases()
-  }, [filters, searchTerm])
+  const {
+    data: caseResponse,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useCases(queryParams)
+
+  const cases = caseResponse?.data || []
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
@@ -63,7 +51,7 @@ export function CaseList({ initialFilters = {}, className }: CaseListProps) {
   }
 
   const refresh = () => {
-    fetchCases()
+    refetch()
   }
 
   if (isError) {
@@ -74,7 +62,9 @@ export function CaseList({ initialFilters = {}, className }: CaseListProps) {
             <div className="text-center">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">加载失败</h3>
-              <p className="text-muted-foreground mb-4">无法加载案例列表，请稍后重试</p>
+              <p className="text-muted-foreground mb-4">
+                {error?.message || '无法加载案例列表，请稍后重试'}
+              </p>
               <Button onClick={refresh} variant="outline">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 重试
@@ -158,7 +148,7 @@ export function CaseList({ initialFilters = {}, className }: CaseListProps) {
         <CardHeader>
           <CardTitle>案例列表</CardTitle>
           <CardDescription>
-            {isLoading ? '加载中...' : `共 ${cases.length} 个案例`}
+            {isLoading ? '加载中...' : `共 ${caseResponse?.meta?.total || cases.length} 个案例`}
           </CardDescription>
         </CardHeader>
         <CardContent>

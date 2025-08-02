@@ -8,7 +8,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/a
 console.log('🔍 [API] Base URL:', API_BASE_URL)
 
 // 创建axios实例
-export const apiClient = axios.create({
+const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
@@ -175,63 +175,7 @@ export interface PaginatedResponse<T> {
   }
 }
 
-export interface Notification {
-  notification_id: number
-  type: string
-  title: string
-  message: string
-  sender_id?: number
-  recipient_id: number
-  case_id?: number
-  is_read: boolean
-  read_at?: string
-  created_at: string
-  updated_at: string
-  metadata?: any
-  sender?: {
-    user_id: number
-    username: string
-    email: string
-  }
-  case?: {
-    case_id: number
-    title: string
-    status: string
-    priority: string
-  }
-}
-
-export interface NotificationStats {
-  unreadCount: number
-  totalCount: number
-  byType: Record<string, number>
-  todayCount: number
-}
-
-export interface NotificationQueryParams {
-  type?: string
-  is_read?: boolean
-  case_id?: number
-  page?: number
-  limit?: number
-}
-
-export interface CreateNotificationRequest {
-  type: string
-  title: string
-  message: string
-  sender_id?: number
-  recipient_id: number
-  case_id?: number
-  metadata?: any
-}
-
-export interface BulkMarkReadRequest {
-  notification_ids?: number[]
-  type?: string
-}
-
-// =================== API方法 ===================
+// =================== API方法对象 ===================
 
 export const api = {
   // 认证相关
@@ -284,45 +228,6 @@ export const api = {
       apiClient.get('/cases', { params: { view } }),
   },
 
-  // 通知相关
-  notifications: {
-    getAll: (params?: NotificationQueryParams): Promise<AxiosResponse<PaginatedResponse<Notification>>> =>
-      apiClient.get('/notifications', { params }),
-    
-    getById: (id: number): Promise<AxiosResponse<Notification>> =>
-      apiClient.get(`/notifications/${id}`),
-    
-    create: (data: CreateNotificationRequest): Promise<AxiosResponse<Notification>> =>
-      apiClient.post('/notifications', data),
-    
-    update: (id: number, data: { is_read?: boolean; metadata?: any }): Promise<AxiosResponse<Notification>> =>
-      apiClient.patch(`/notifications/${id}`, data),
-    
-    delete: (id: number): Promise<AxiosResponse<{ message: string }>> =>
-      apiClient.delete(`/notifications/${id}`),
-    
-    getStats: (): Promise<AxiosResponse<NotificationStats>> =>
-      apiClient.get('/notifications/stats'),
-    
-    getUnreadCount: (): Promise<AxiosResponse<{ unreadCount: number }>> =>
-      apiClient.get('/notifications/unread-count'),
-    
-    markAsRead: (id: number): Promise<AxiosResponse<Notification>> =>
-      apiClient.patch(`/notifications/${id}/mark-read`),
-    
-    markAsUnread: (id: number): Promise<AxiosResponse<Notification>> =>
-      apiClient.patch(`/notifications/${id}/mark-unread`),
-    
-    bulkMarkRead: (data: BulkMarkReadRequest): Promise<AxiosResponse<{ updatedCount: number }>> =>
-      apiClient.post('/notifications/bulk-mark-read', data),
-    
-    markAllRead: (): Promise<AxiosResponse<{ updatedCount: number }>> =>
-      apiClient.post('/notifications/mark-all-read'),
-    
-    cleanup: (days?: number): Promise<AxiosResponse<{ deletedCount: number }>> =>
-      apiClient.post('/notifications/cleanup', { params: { days } }),
-  },
-
   // 文件相关
   files: {
     upload: (file: File): Promise<AxiosResponse<any>> => {
@@ -349,15 +254,11 @@ export const api = {
     
     info: (): Promise<AxiosResponse<any>> =>
       apiClient.get('/info'),
+    
+    getWelcome: (): Promise<AxiosResponse<string>> =>
+      apiClient.get('/').then(res => ({ ...res, data: res.data || 'API 连接正常' })),
   },
 }
-
-// 默认导出
-export default apiClient
-
-// 便利方法
-export const healthCheck = () => api.system.health()
-export const getSystemInfo = () => api.system.info()
 
 // 错误处理辅助函数
 export const handleApiError = (error: any): string => {
@@ -395,9 +296,10 @@ export const handleApiError = (error: any): string => {
   return error.message || '未知错误'
 }
 
-// 调试用的日志函数
-export const logApiCall = (method: string, url: string, data?: any) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`🔍 [API] ${method.toUpperCase()} ${url}`, data ? { data } : '')
-  }
-}
+// 主要导出 - 修复导入问题
+export { apiClient }
+export default api
+
+// 便利方法
+export const healthCheck = () => api.system.health()
+export const getSystemInfo = () => api.system.info()

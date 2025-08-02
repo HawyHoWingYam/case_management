@@ -17,7 +17,7 @@ import { CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react'
 
 import { Case } from '@/types/case'
 import { useAuthStore } from '@/stores/authStore'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'  // 修复：使用正确的导入
 import { toast } from 'sonner'
 
 interface CaseAcceptRejectProps {
@@ -76,7 +76,9 @@ export function CaseAcceptReject({
 
     setIsAccepting(true)
     try {
-      const response = await apiClient.cases.acceptCase(caseData.id)
+      console.log('🔍 [CaseAcceptReject] Accepting case:', caseData.id)
+      const response = await api.cases.acceptCase(caseData.id)  // 修复：使用api而不是apiClient
+      console.log('🔍 [CaseAcceptReject] Accept response:', response.data)
       
       // 更新案件状态
       const updatedCase = {
@@ -90,9 +92,9 @@ export function CaseAcceptReject({
       
       toast.success('案件接受成功！案件状态已更新为进行中')
     } catch (error: any) {
+      console.error('🔍 [CaseAcceptReject] Accept error:', error)
       const errorMessage = error.response?.data?.message || '接受案件失败'
       toast.error(errorMessage)
-      console.error('Accept case error:', error)
     } finally {
       setIsAccepting(false)
     }
@@ -107,7 +109,9 @@ export function CaseAcceptReject({
 
     setIsRejecting(true)
     try {
-      const response = await apiClient.cases.rejectCase(caseData.id)
+      console.log('🔍 [CaseAcceptReject] Rejecting case:', caseData.id)
+      const response = await api.cases.rejectCase(caseData.id)  // 修复：使用api而不是apiClient
+      console.log('🔍 [CaseAcceptReject] Reject response:', response.data)
       
       // 更新案件状态
       const updatedCase = {
@@ -123,9 +127,9 @@ export function CaseAcceptReject({
       
       toast.success('案件拒绝成功！案件已回到待指派状态')
     } catch (error: any) {
+      console.error('🔍 [CaseAcceptReject] Reject error:', error)
       const errorMessage = error.response?.data?.message || '拒绝案件失败'
       toast.error(errorMessage)
-      console.error('Reject case error:', error)
     } finally {
       setIsRejecting(false)
     }

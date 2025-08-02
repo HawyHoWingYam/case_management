@@ -43,7 +43,7 @@ import { CasePriority, CreateCaseFormData, CASE_PRIORITY_CONFIG } from '@/types/
 import { FileUpload } from './FileUpload'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'  // 修复：使用正确的导入
 import { useAuthStore } from '@/stores/authStore'
 
 // 表单验证模式
@@ -108,7 +108,7 @@ export function CaseForm({
       title: initialData?.title || '',
       description: initialData?.description || '',
       priority: initialData?.priority || 'MEDIUM',
-      assigned_to_id: initialData?.assigned_to_id || undefined,
+      assigned_to_id: initialData?.assigned_to_id?.toString() || undefined,
       due_date: initialData?.due_date ? new Date(initialData.due_date) : undefined,
       metadata: initialData?.metadata || {},
     },
@@ -124,10 +124,12 @@ export function CaseForm({
 
       setLoadingCaseworkers(true)
       try {
-        const response = await apiClient.cases.getAvailableCaseworkers()
+        console.log('🔍 [CaseForm] Fetching available caseworkers...')
+        const response = await api.cases.getAvailableCaseworkers()  // 修复：使用api
+        console.log('🔍 [CaseForm] Available caseworkers:', response.data)
         setAvailableCaseworkers(response.data)
       } catch (error) {
-        console.error('Failed to fetch available caseworkers:', error)
+        console.error('🔍 [CaseForm] Failed to fetch available caseworkers:', error)
         // 如果 API 失败，使用空数组，不显示错误
         setAvailableCaseworkers([])
       } finally {
@@ -384,53 +386,55 @@ export function CaseForm({
                     )}
                   />
 
-                  {/* 指派给 */}
-                  <FormField
-                    control={form.control}
-                    name="assigned_to_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>指派给</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          disabled={isSubmitting || loadingCaseworkers}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={loadingCaseworkers ? "加载中..." : "选择处理人员"} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="unassigned">不指派</SelectItem>
-                            {availableCaseworkers.map((caseworker) => (
-                              <SelectItem key={caseworker.user_id} value={caseworker.user_id.toString()}>
-                                <div className="flex items-center space-x-2">
-                                  <User className="h-3 w-3" />
-                                  <span>{caseworker.username}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    ({caseworker.email})
-                                  </span>
-                                  {!caseworker.canAcceptMore && (
-                                    <Badge variant="secondary" className="text-xs">满载</Badge>
-                                  )}
-                                  {caseworker.activeCases > 0 && (
+                  {/* 指派给 - 只有ADMIN/MANAGER能看到 */}
+                  {hasRole(['ADMIN', 'MANAGER']) && (
+                    <FormField
+                      control={form.control}
+                      name="assigned_to_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>指派给</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={isSubmitting || loadingCaseworkers}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingCaseworkers ? "加载中..." : "选择处理人员"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="unassigned">不指派</SelectItem>
+                              {availableCaseworkers.map((caseworker) => (
+                                <SelectItem key={caseworker.user_id} value={caseworker.user_id.toString()}>
+                                  <div className="flex items-center space-x-2">
+                                    <User className="h-3 w-3" />
+                                    <span>{caseworker.username}</span>
                                     <span className="text-xs text-muted-foreground">
-                                      {caseworker.activeCases}个案件
+                                      ({caseworker.email})
                                     </span>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          选择负责处理这个案件的人员
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                                    {!caseworker.canAcceptMore && (
+                                      <Badge variant="secondary" className="text-xs">满载</Badge>
+                                    )}
+                                    {caseworker.activeCases > 0 && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {caseworker.activeCases}个案件
+                                      </span>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            选择负责处理这个案件的人员
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
 
                 {/* 截止日期 */}

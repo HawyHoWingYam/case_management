@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 
 import { useAuthStore } from '@/stores/authStore'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'  // 修复：使用正确的导入
 import { CreateCaseFormData } from '@/types/case'
 import { CaseForm } from '@/components/cases/CaseForm'
 import { toast } from 'sonner'
@@ -56,9 +56,9 @@ export default function CreateCasePage() {
     try {
       console.log('🚀 [CreateCasePage] Received data from CaseForm:', data)
       console.log('🚀 [CreateCasePage] data.assigned_to:', data.assigned_to, 'type:', typeof data.assigned_to)
-      console.log('🚀 [CreateCasePage] About to call apiClient.cases.create...')
+      console.log('🚀 [CreateCasePage] About to call api.cases.create...')
       
-      const response = await apiClient.cases.create(data)
+      const response = await api.cases.create(data)  // 修复：使用api而不是apiClient
       
       console.log('✅ [CreateCasePage] API response received:', response)
       console.log('✅ [CreateCasePage] response.data:', response.data)
@@ -200,6 +200,11 @@ export default function CreateCasePage() {
             <p>
               <strong>文件附件：</strong>可以上传相关的截图、文档等文件，有助于问题的诊断和解决。
             </p>
+            {hasRole(['ADMIN', 'MANAGER']) && (
+              <p>
+                <strong>案件指派：</strong>作为管理员/经理，您可以在创建时直接指派案件给团队成员，或创建后再进行指派。
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

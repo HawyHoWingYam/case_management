@@ -30,10 +30,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 import { useAuthStore } from '@/stores/authStore'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'  // 修复：使用正确的导入
 import { Case } from '@/types/case'
 import { CaseStatusBadge, CasePriorityBadge } from '@/components/cases/CaseStatusBadge'
 import { CaseAcceptReject } from '@/components/cases/CaseAcceptReject'
+import { CaseAssignment } from '@/components/cases/CaseAssignment'  // 新增：导入Chair指派组件
 import { toast } from 'sonner'
 
 export default function CaseDetailPage() {
@@ -59,7 +60,8 @@ export default function CaseDetailPage() {
     setError(null)
     
     try {
-      const response = await apiClient.cases.getById(parseInt(caseId, 10))
+      console.log('🔍 [CaseDetailPage] Fetching case detail for ID:', caseId)
+      const response = await api.cases.getById(parseInt(caseId, 10))  // 修复：使用api
       console.log('🔍 [CaseDetailPage] DEBUG: Full API response:', response)
       console.log('🔍 [CaseDetailPage] DEBUG: Case data:', response.data)
       console.log('🔍 [CaseDetailPage] DEBUG: Case metadata:', response.data.metadata)
@@ -94,7 +96,7 @@ export default function CaseDetailPage() {
     }
 
     try {
-      await apiClient.cases.delete(parseInt(caseId, 10))
+      await api.cases.delete(parseInt(caseId, 10))  // 修复：使用api
       toast.success('案件删除成功')
       router.push('/cases')
     } catch (error: any) {
@@ -103,8 +105,9 @@ export default function CaseDetailPage() {
     }
   }
 
-  // 处理案件更新（用于accept/reject操作）
+  // 处理案件更新（用于accept/reject/assign操作）
   const handleCaseUpdate = (updatedCase: Case) => {
+    console.log('🔍 [CaseDetailPage] Case updated:', updatedCase)
     setCaseData(updatedCase)
   }
 
@@ -273,8 +276,8 @@ export default function CaseDetailPage() {
               <span>{caseData.title}</span>
             </CardTitle>
             <div className="flex items-center space-x-2">
-              <CaseStatusBadge status={caseData.status} />
-              <CasePriorityBadge priority={caseData.priority} />
+              <CaseStatusBadge status={caseData.status as any} />
+              <CasePriorityBadge priority={caseData.priority as any} />
             </div>
           </div>
         </CardHeader>
@@ -299,8 +302,8 @@ export default function CaseDetailPage() {
               <div className="flex items-center space-x-2">
                 <User className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">{caseData.created_by.username}</p>
-                  <p className="text-xs text-muted-foreground">{caseData.created_by.email}</p>
+                  <p className="text-sm font-medium">{caseData.created_by?.username}</p>
+                  <p className="text-xs text-muted-foreground">{caseData.created_by?.email}</p>
                 </div>
               </div>
             </div>
@@ -411,7 +414,14 @@ export default function CaseDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Case Accept/Reject Actions - Only show for assigned caseworkers with PENDING status */}
+      {/* 新增：Chair指派功能 - 只对ADMIN/MANAGER且案件状态为OPEN时显示 */}
+      <CaseAssignment 
+        caseData={caseData}
+        onCaseUpdate={handleCaseUpdate}
+        className="mb-6"
+      />
+
+      {/* Case Accept/Reject Actions - 只对被指派的USER且状态为PENDING时显示 */}
       <CaseAcceptReject 
         caseData={caseData}
         onCaseUpdate={handleCaseUpdate}

@@ -16,28 +16,54 @@ import {
 } from 'lucide-react'
 import { apiClient, HealthStatus as HealthStatusType, ApiInfo } from '@/lib/api'
 
-export default function HealthStatus() {
+function HealthStatusComponent() {
   const [healthData, setHealthData] = useState<HealthStatusType | null>(null)
   const [apiInfo, setApiInfo] = useState<ApiInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
 
+  // 添加调试日志
+  useEffect(() => {
+    console.log('🏥 [HealthStatus] Component mounted, starting health check')
+    fetchHealthData()
+    
+    // 每30秒自动刷新
+    const interval = setInterval(() => {
+      console.log('🏥 [HealthStatus] Auto-refresh health data')
+      fetchHealthData()
+    }, 30000)
+    
+    return () => {
+      console.log('🏥 [HealthStatus] Component unmounted, clearing interval')
+      clearInterval(interval)
+    }
+  }, [])
+
   const fetchHealthData = async () => {
+    console.log('🏥 [HealthStatus] Fetching health data...')
     setLoading(true)
     setError(null)
     
     try {
       const [healthResponse, infoResponse] = await Promise.all([
-        apiClient.system.getHealth().catch(() => null),
-        apiClient.system.getInfo().catch(() => null)
+        apiClient.system.getHealth().catch((err) => {
+          console.warn('🏥 [HealthStatus] Health endpoint failed:', err.message)
+          return null
+        }),
+        apiClient.system.getInfo().catch((err) => {
+          console.warn('🏥 [HealthStatus] Info endpoint failed:', err.message)
+          return null
+        })
       ])
       
       if (healthResponse?.data) {
+        console.log('🏥 [HealthStatus] Health data received:', healthResponse.data)
         setHealthData(healthResponse.data)
       }
       
       if (infoResponse?.data) {
+        console.log('🏥 [HealthStatus] API info received:', infoResponse.data)
         setApiInfo(infoResponse.data)
       }
       
@@ -46,22 +72,17 @@ export default function HealthStatus() {
       }
       
       setLastChecked(new Date())
+      console.log('🏥 [HealthStatus] Health check completed successfully')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '连接失败')
+      const errorMessage = err instanceof Error ? err.message : '连接失败'
+      console.error('🏥 [HealthStatus] Health check failed:', errorMessage)
+      setError(errorMessage)
       setHealthData(null)
       setApiInfo(null)
     } finally {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    fetchHealthData()
-    
-    // 每30秒自动刷新
-    const interval = setInterval(fetchHealthData, 30000)
-    return () => clearInterval(interval)
-  }, [])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -250,3 +271,7 @@ export default function HealthStatus() {
     </Card>
   )
 }
+
+// 同时提供默认导出和命名导出
+export default HealthStatusComponent
+export { HealthStatusComponent as HealthStatus }

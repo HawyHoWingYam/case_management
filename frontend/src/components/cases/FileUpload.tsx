@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'  // 修复：使用正确的导入
 import { toast } from 'sonner'
 
 interface FileUploadProps {
@@ -73,7 +73,9 @@ export function FileUpload({
     // 逐个上传文件
     acceptedFiles.forEach(async (file, index) => {
       try {
-        const response = await apiClient.files.upload(file)
+        console.log('🔍 [FileUpload] Uploading file:', file.name)
+        const response = await api.files.upload(file)  // 修复：使用api而不是apiClient
+        console.log('🔍 [FileUpload] Upload response:', response.data)
         
         // 更新上传状态
         setUploadingFiles(prev => 
@@ -95,6 +97,7 @@ export function FileUpload({
         toast.success(`文件 ${file.name} 上传成功`)
 
       } catch (error: any) {
+        console.error('🔍 [FileUpload] Upload error:', error)
         const errorMessage = error.response?.data?.message || '文件上传失败'
         
         setUploadingFiles(prev => 
