@@ -4,20 +4,26 @@ import {
   Logger,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { UpdateCaseDto } from './dto/update-case.dto';
 import { CaseQueryDto, CaseStatsQueryDto } from './dto/case-query.dto';
-import { CaseStatus, Priority, Prisma } from '@prisma/client';
+import { CaseStatus, Priority, Prisma, NotificationType } from '@prisma/client';
 import { CaseActionResponseDto } from './dto/case-action-response.dto';
-
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CasesService {
   private readonly logger = new Logger(CasesService.name);
 
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => NotificationsService))
+    private notificationsService: NotificationsService,
+  ) {}
 
   /**
    * 创建新案件
@@ -25,25 +31,25 @@ export class CasesService {
   async create(createCaseDto: CreateCaseDto, createdBy: number) {
     try {
       // Debug: Log the received data
-      this.logger.log(`Creating case with DTO: ${JSON.stringify(createCaseDto)}`);
-      this.logger.log(`assigned_to value: ${createCaseDto.assigned_to}, type: ${typeof createCaseDto.assigned_to}`);
+      this.logger.log(`Creating case with DTO: ${JSON.stringify(createCaseDto)}`, 'CREATE_CASE');
+      this.logger.log(`assigned_to value: ${createCaseDto.assigned_to}, type: ${typeof createCaseDto.assigned_to}`, 'CREATE_CASE');
       
       // Debug: Detailed metadata logging
       if (createCaseDto.metadata) {
-        this.logger.log(`Metadata received: ${JSON.stringify(createCaseDto.metadata)}`);
-        this.logger.log(`Metadata type: ${typeof createCaseDto.metadata}`);
-        this.logger.log(`Metadata keys: ${Object.keys(createCaseDto.metadata)}`);
+        this.logger.log(`Metadata received: ${JSON.stringify(createCaseDto.metadata)}`, 'CREATE_CASE');
+        this.logger.log(`Metadata type: ${typeof createCaseDto.metadata}`, 'CREATE_CASE');
+        this.logger.log(`Metadata keys: ${Object.keys(createCaseDto.metadata)}`, 'CREATE_CASE');
         
         if (createCaseDto.metadata.attachments) {
-          this.logger.log(`Attachments found in metadata: ${createCaseDto.metadata.attachments.length} files`);
+          this.logger.log(`Attachments found in metadata: ${createCaseDto.metadata.attachments.length} files`, 'CREATE_CASE');
           createCaseDto.metadata.attachments.forEach((attachment, index) => {
-            this.logger.log(`Attachment ${index + 1}: ${JSON.stringify(attachment)}`);
+            this.logger.log(`Attachment ${index + 1}: ${JSON.stringify(attachment)}`, 'CREATE_CASE');
           });
         } else {
-          this.logger.log(`No attachments found in metadata`);
+          this.logger.log(`No attachments found in metadata`, 'CREATE_CASE');
         }
       } else {
-        this.logger.log(`No metadata provided`);
+        this.logger.log(`No metadata provided`, 'CREATE_CASE');
       }
       
       // 如果指定了 assigned_to，验证用户是否存在
@@ -79,14 +85,14 @@ export class CasesService {
       });
 
       // Debug: Log what was actually saved to database
-      this.logger.log(`New case created with ID: ${newCase.case_id}`);
-      this.logger.log(`Case metadata stored in DB: ${JSON.stringify(newCase.metadata)}`);
-      this.logger.log(`Case metadata type: ${typeof newCase.metadata}`);
+      this.logger.log(`New case created with ID: ${newCase.case_id}`, 'CREATE_CASE');
+      this.logger.log(`Case metadata stored in DB: ${JSON.stringify(newCase.metadata)}`, 'CREATE_CASE');
+      this.logger.log(`Case metadata type: ${typeof newCase.metadata}`, 'CREATE_CASE');
       if (newCase.metadata) {
-        this.logger.log(`Case metadata keys: ${Object.keys(newCase.metadata)}`);
+        this.logger.log(`Case metadata keys: ${Object.keys(newCase.metadata)}`, 'CREATE_CASE');
         const metadata = newCase.metadata as any;
         if (metadata.attachments) {
-          this.logger.log(`Case has ${metadata.attachments.length} attachments in DB`);
+          this.logger.log(`Case has ${metadata.attachments.length} attachments in DB`, 'CREATE_CASE');
         }
       }
 
@@ -100,7 +106,7 @@ export class CasesService {
         },
       });
 
-      // 如果创建时就有指派，添加指派日志
+      // 如果创建时就有指派，添加指派日志和通知
       if (createCaseDto.assigned_to) {
         const assignedUser = await this.prisma.user.findUnique({
           where: { user_id: createCaseDto.assigned_to },
@@ -115,9 +121,22 @@ export class CasesService {
             details: `创建时将案件指派给 ${assignedUser?.username || 'Unknown'} (ID: ${createCaseDto.assigned_to})，状态变更为 PENDING`,
           },
         });
+
+        // 🔔 发送指派通知
+        try {
+          await this.notificationsService.createCaseNotification(
+            NotificationType.CASE_ASSIGNED,
+            createCaseDto.assigned_to,
+            newCase.case_id,
+            createdBy,
+          );
+          this.logger.log(`Assignment notification sent for case ${newCase.case_id}`, 'CREATE_CASE');
+        } catch (error) {
+          this.logger.error(`Failed to send assignment notification: ${error.message}`, 'CREATE_CASE');
+        }
       }
 
-      this.logger.log(`New case created: ${newCase.case_id} by user ${createdBy}`);
+      this.logger.log(`New case created: ${newCase.case_id} by user ${createdBy}`, 'CREATE_CASE');
 
       // 映射字段名以匹配前端期望的格式
       return this.mapCaseFields(newCase);
@@ -282,22 +301,22 @@ export class CasesService {
       }
 
       // Debug: Log retrieved case data for metadata debugging
-      this.logger.log(`Retrieved case ${id} from database`);
-      this.logger.log(`Case metadata from DB: ${JSON.stringify(caseData.metadata)}`);
-      this.logger.log(`Case metadata type: ${typeof caseData.metadata}`);
+      this.logger.log(`Retrieved case ${id} from database`, 'FETCH_CASE_DETAIL');
+      this.logger.log(`Case metadata from DB: ${JSON.stringify(caseData.metadata)}`, 'FETCH_CASE_DETAIL');
+      this.logger.log(`Case metadata type: ${typeof caseData.metadata}`, 'FETCH_CASE_DETAIL');
       if (caseData.metadata) {
-        this.logger.log(`Case metadata keys: ${Object.keys(caseData.metadata)}`);
+        this.logger.log(`Case metadata keys: ${Object.keys(caseData.metadata)}`, 'FETCH_CASE_DETAIL');
         const metadata = caseData.metadata as any;
         if (metadata.attachments) {
-          this.logger.log(`Case has ${metadata.attachments.length} attachments from DB`);
+          this.logger.log(`Case has ${metadata.attachments.length} attachments from DB`, 'FETCH_CASE_DETAIL');
           metadata.attachments.forEach((attachment, index) => {
-            this.logger.log(`DB Attachment ${index + 1}: ${JSON.stringify(attachment)}`);
+            this.logger.log(`DB Attachment ${index + 1}: ${JSON.stringify(attachment)}`, 'FETCH_CASE_DETAIL');
           });
         } else {
-          this.logger.log(`No attachments found in case metadata from DB`);
+          this.logger.log(`No attachments found in case metadata from DB`, 'FETCH_CASE_DETAIL');
         }
       } else {
-        this.logger.log(`Case metadata is null/undefined from DB`);
+        this.logger.log(`Case metadata is null/undefined from DB`, 'FETCH_CASE_DETAIL');
       }
 
       // 权限检查：普通用户只能查看自己相关的案件
@@ -376,7 +395,32 @@ export class CasesService {
         },
       });
 
-      this.logger.log(`Case ${id} updated by user ${userId}`);
+      // 🔔 发送状态变更通知
+      if (updateCaseDto.status && updateCaseDto.status !== existingCase.status) {
+        try {
+          // 通知相关用户（创建者和被指派者）
+          const notificationTargets = [existingCase.created_by_id];
+          if (existingCase.assigned_to_id && existingCase.assigned_to_id !== existingCase.created_by_id) {
+            notificationTargets.push(existingCase.assigned_to_id);
+          }
+
+          for (const targetUserId of notificationTargets) {
+            if (targetUserId !== userId) { // 不要给操作者发通知
+              await this.notificationsService.createCaseNotification(
+                NotificationType.CASE_STATUS_CHANGED,
+                targetUserId,
+                id,
+                userId,
+              );
+            }
+          }
+          this.logger.log(`Status change notifications sent for case ${id}`, 'UPDATE_CASE');
+        } catch (error) {
+          this.logger.error(`Failed to send status change notification: ${error.message}`, 'UPDATE_CASE');
+        }
+      }
+
+      this.logger.log(`Case ${id} updated by user ${userId}`, 'UPDATE_CASE');
 
       return this.mapCaseFields(updatedCase);
     } catch (error) {
@@ -403,7 +447,7 @@ export class CasesService {
         where: { case_id: id },
       });
 
-      this.logger.log(`Case ${id} deleted by user ${userId}`);
+      this.logger.log(`Case ${id} deleted by user ${userId}`, 'DELETE_CASE');
 
       return { message: '案件删除成功' };
     } catch (error) {
@@ -574,7 +618,323 @@ export class CasesService {
     }
   }
 
-  // 私有辅助方法
+  // =================== 案件操作方法 ===================
+
+  /**
+   * Chair 指派案件給 Caseworker
+   */
+  async assignCase(caseId: number, assignedCaseworkerId: number, assigner: any): Promise<CaseActionResponseDto> {
+    try {
+      // 1. 檢查案件是否存在
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      if (!existingCase) {
+        throw new NotFoundException('案件不存在');
+      }
+
+      // 2. 檢查案件狀態是否允許指派
+      if (existingCase.status !== 'OPEN') {
+        throw new BadRequestException(`案件當前狀態為 ${existingCase.status}，只有 OPEN 狀態的案件可以指派`);
+      }
+
+      // 3. 檢查被指派的用戶是否存在且為 Caseworker
+      const caseworker = await this.prisma.user.findUnique({
+        where: { user_id: assignedCaseworkerId }
+      });
+
+      if (!caseworker) {
+        throw new NotFoundException('指派的用戶不存在');
+      }
+
+      if (!caseworker.is_active) {
+        throw new BadRequestException('指派的用戶已被禁用');
+      }
+
+      if (caseworker.role !== 'USER') {
+        throw new BadRequestException('只能將案件指派給 Caseworker (USER角色)');
+      }
+
+      // 4. 檢查 Caseworker 當前案件數量（預檢查）
+      const activeCasesCount = await this.prisma.case.count({
+        where: {
+          assigned_to: assignedCaseworkerId,
+          status: { in: ['PENDING', 'IN_PROGRESS'] }
+        }
+      });
+
+      if (activeCasesCount >= 5) {
+        throw new BadRequestException(`該 Caseworker 已有 ${activeCasesCount} 個活躍案件，無法接受更多指派`);
+      }
+
+      // 5. 更新案件
+      const updatedCase = await this.prisma.case.update({
+        where: { case_id: caseId },
+        data: {
+          assigned_to: assignedCaseworkerId,
+          status: 'PENDING', // 狀態變更為待接受
+          updated_at: new Date()
+        },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      // 6. 記錄操作日誌
+      await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: assigner.user_id,
+          action: '指派案件',
+          details: `將案件指派給 ${caseworker.username} (ID: ${assignedCaseworkerId})`
+        }
+      });
+
+      // 🔔 發送指派通知
+      try {
+        await this.notificationsService.createCaseNotification(
+          NotificationType.CASE_ASSIGNED,
+          assignedCaseworkerId,
+          caseId,
+          assigner.user_id,
+        );
+        this.logger.log(`Assignment notification sent for case ${caseId}`, 'ASSIGN_CASE');
+      } catch (error) {
+        this.logger.error(`Failed to send assignment notification: ${error.message}`, 'ASSIGN_CASE');
+      }
+
+      this.logger.log(`Case ${caseId} assigned to user ${assignedCaseworkerId} by ${assigner.user_id}`, 'ASSIGN_CASE');
+
+      return {
+        success: true,
+        message: '案件指派成功',
+        caseId,
+        newStatus: 'PENDING'
+      };
+    } catch (error) {
+      this.logger.error(`Error assigning case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Caseworker 接受指派的案件
+   */
+  async acceptCase(caseId: number, caseworkerId: number): Promise<CaseActionResponseDto> {
+    try {
+      // 1. 檢查案件是否存在且指派給當前用戶
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      if (!existingCase) {
+        throw new NotFoundException('案件不存在');
+      }
+
+      if (existingCase.assigned_to !== caseworkerId) {
+        throw new ForbiddenException('此案件未指派給您');
+      }
+
+      if (existingCase.status !== 'PENDING') {
+        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 PENDING 狀態的案件可以接受`);
+      }
+
+      // 2. 檢查 Caseworker 當前處理的案件數量（業務規則：最多5個）
+      const activeCount = await this.prisma.case.count({
+        where: {
+          assigned_to: caseworkerId,
+          status: 'IN_PROGRESS'
+        }
+      });
+
+      if (activeCount >= 5) {
+        throw new BadRequestException(`您已有 ${activeCount} 個進行中的案件，無法接受更多案件（上限5個）`);
+      }
+
+      // 3. 更新案件狀態
+      const updatedCase = await this.prisma.case.update({
+        where: { case_id: caseId },
+        data: {
+          status: 'IN_PROGRESS',
+          updated_at: new Date()
+        }
+      });
+
+      // 4. 記錄操作日誌
+      await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: caseworkerId,
+          action: '接受案件',
+          details: 'Caseworker 接受了指派的案件'
+        }
+      });
+
+      // 🔔 發送接受通知給創建者
+      try {
+        if (existingCase.created_by !== caseworkerId) {
+          await this.notificationsService.createCaseNotification(
+            NotificationType.CASE_ACCEPTED,
+            existingCase.created_by,
+            caseId,
+            caseworkerId,
+          );
+        }
+        this.logger.log(`Case acceptance notification sent for case ${caseId}`, 'ACCEPT_CASE');
+      } catch (error) {
+        this.logger.error(`Failed to send acceptance notification: ${error.message}`, 'ACCEPT_CASE');
+      }
+
+      this.logger.log(`Case ${caseId} accepted by user ${caseworkerId}`, 'ACCEPT_CASE');
+
+      return {
+        success: true,
+        message: '案件接受成功',
+        caseId,
+        newStatus: 'IN_PROGRESS'
+      };
+    } catch (error) {
+      this.logger.error(`Error accepting case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Caseworker 拒絕指派的案件
+   */
+  async rejectCase(caseId: number, caseworkerId: number): Promise<CaseActionResponseDto> {
+    try {
+      // 1. 檢查案件是否存在且指派給當前用戶
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      if (!existingCase) {
+        throw new NotFoundException('案件不存在');
+      }
+
+      if (existingCase.assigned_to !== caseworkerId) {
+        throw new ForbiddenException('此案件未指派給您');
+      }
+
+      if (existingCase.status !== 'PENDING') {
+        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 PENDING 狀態的案件可以拒絕`);
+      }
+
+      // 2. 更新案件狀態，清空指派
+      const updatedCase = await this.prisma.case.update({
+        where: { case_id: caseId },
+        data: {
+          assigned_to: null,
+          status: 'OPEN', // 狀態回到 OPEN，等待重新指派
+          updated_at: new Date()
+        }
+      });
+
+      // 3. 記錄操作日誌
+      await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: caseworkerId,
+          action: '拒絕案件',
+          details: 'Caseworker 拒絕了指派的案件，案件狀態已回到 OPEN'
+        }
+      });
+
+      // 🔔 發送拒絕通知給創建者
+      try {
+        if (existingCase.created_by !== caseworkerId) {
+          await this.notificationsService.createCaseNotification(
+            NotificationType.CASE_REJECTED,
+            existingCase.created_by,
+            caseId,
+            caseworkerId,
+          );
+        }
+        this.logger.log(`Case rejection notification sent for case ${caseId}`, 'REJECT_CASE');
+      } catch (error) {
+        this.logger.error(`Failed to send rejection notification: ${error.message}`, 'REJECT_CASE');
+      }
+
+      this.logger.log(`Case ${caseId} rejected by user ${caseworkerId}`, 'REJECT_CASE');
+
+      return {
+        success: true,
+        message: '案件拒絕成功，已回到待指派狀態',
+        caseId,
+        newStatus: 'OPEN'
+      };
+    } catch (error) {
+      this.logger.error(`Error rejecting case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * 獲取可指派的 Caseworker 列表
+   */
+  async getAvailableCaseworkers() {
+    try {
+      // 獲取所有活躍的 USER 角色用戶
+      const caseworkers = await this.prisma.user.findMany({
+        where: {
+          role: 'USER',
+          is_active: true
+        },
+        select: {
+          user_id: true,
+          username: true,
+          email: true
+        }
+      });
+
+      // 為每個 Caseworker 計算當前活躍案件數
+      const caseworkersWithStats = await Promise.all(
+        caseworkers.map(async (caseworker) => {
+          const activeCases = await this.prisma.case.count({
+            where: {
+              assigned_to: caseworker.user_id,
+              status: { in: ['PENDING', 'IN_PROGRESS'] }
+            }
+          });
+
+          return {
+            user_id: caseworker.user_id,
+            username: caseworker.username,
+            email: caseworker.email,
+            activeCases,
+            canAcceptMore: activeCases < 5
+          };
+        })
+      );
+
+      // 按照可接受能力和活躍案件數排序
+      return caseworkersWithStats.sort((a, b) => {
+        if (a.canAcceptMore && !b.canAcceptMore) return -1;
+        if (!a.canAcceptMore && b.canAcceptMore) return 1;
+        return a.activeCases - b.activeCases;
+      });
+    } catch (error) {
+      this.logger.error(`Error getting available caseworkers: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  // =================== 私有辅助方法 ===================
 
   /**
    * 构建 WHERE 查询条件
@@ -756,8 +1116,6 @@ export class CasesService {
     return {};
   }
 
-
-
   /**
    * 获取可用的筛选选项
    */
@@ -897,279 +1255,9 @@ export class CasesService {
     });
   }
 
-
   /**
- * Chair 指派案件給 Caseworker
- */
-  async assignCase(caseId: number, assignedCaseworkerId: number, assigner: any): Promise<CaseActionResponseDto> {
-    try {
-      // 1. 檢查案件是否存在
-      const existingCase = await this.prisma.case.findUnique({
-        where: { case_id: caseId },
-        include: {
-          creator: { select: { user_id: true, username: true } },
-          assignee: { select: { user_id: true, username: true } }
-        }
-      });
-
-      if (!existingCase) {
-        throw new NotFoundException('案件不存在');
-      }
-
-      // 2. 檢查案件狀態是否允許指派
-      if (existingCase.status !== 'OPEN') {
-        throw new BadRequestException(`案件當前狀態為 ${existingCase.status}，只有 OPEN 狀態的案件可以指派`);
-      }
-
-      // 3. 檢查被指派的用戶是否存在且為 Caseworker
-      const caseworker = await this.prisma.user.findUnique({
-        where: { user_id: assignedCaseworkerId }
-      });
-
-      if (!caseworker) {
-        throw new NotFoundException('指派的用戶不存在');
-      }
-
-      if (!caseworker.is_active) {
-        throw new BadRequestException('指派的用戶已被禁用');
-      }
-
-      if (caseworker.role !== 'USER') {
-        throw new BadRequestException('只能將案件指派給 Caseworker (USER角色)');
-      }
-
-      // 4. 檢查 Caseworker 當前案件數量（預檢查）
-      const activeCasesCount = await this.prisma.case.count({
-        where: {
-          assigned_to: assignedCaseworkerId,
-          status: { in: ['PENDING', 'IN_PROGRESS'] }
-        }
-      });
-
-      if (activeCasesCount >= 5) {
-        throw new BadRequestException(`該 Caseworker 已有 ${activeCasesCount} 個活躍案件，無法接受更多指派`);
-      }
-
-      // 5. 更新案件
-      const updatedCase = await this.prisma.case.update({
-        where: { case_id: caseId },
-        data: {
-          assigned_to: assignedCaseworkerId,
-          status: 'PENDING', // 狀態變更為待接受
-          updated_at: new Date()
-        },
-        include: {
-          creator: { select: { user_id: true, username: true } },
-          assignee: { select: { user_id: true, username: true } }
-        }
-      });
-
-      // 6. 記錄操作日誌
-      await this.prisma.caseLog.create({
-        data: {
-          case_id: caseId,
-          user_id: assigner.user_id,
-          action: '指派案件',
-          details: `將案件指派給 ${caseworker.username} (ID: ${assignedCaseworkerId})`
-        }
-      });
-
-      this.logger.log(`Case ${caseId} assigned to user ${assignedCaseworkerId} by ${assigner.user_id}`);
-
-      return {
-        success: true,
-        message: '案件指派成功',
-        caseId,
-        newStatus: 'PENDING'
-      };
-    } catch (error) {
-      this.logger.error(`Error assigning case ${caseId}: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-  /**
-   * Caseworker 接受指派的案件
+   * 修改现有的 mapCaseFields 方法，确保包含 assignee 信息
    */
-  async acceptCase(caseId: number, caseworkerId: number): Promise<CaseActionResponseDto> {
-    try {
-      // 1. 檢查案件是否存在且指派給當前用戶
-      const existingCase = await this.prisma.case.findUnique({
-        where: { case_id: caseId },
-        include: {
-          creator: { select: { user_id: true, username: true } },
-          assignee: { select: { user_id: true, username: true } }
-        }
-      });
-
-      if (!existingCase) {
-        throw new NotFoundException('案件不存在');
-      }
-
-      if (existingCase.assigned_to !== caseworkerId) {
-        throw new ForbiddenException('此案件未指派給您');
-      }
-
-      if (existingCase.status !== 'PENDING') {
-        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 PENDING 狀態的案件可以接受`);
-      }
-
-      // 2. 檢查 Caseworker 當前處理的案件數量（業務規則：最多5個）
-      const activeCount = await this.prisma.case.count({
-        where: {
-          assigned_to: caseworkerId,
-          status: 'IN_PROGRESS'
-        }
-      });
-
-      if (activeCount >= 5) {
-        throw new BadRequestException(`您已有 ${activeCount} 個進行中的案件，無法接受更多案件（上限5個）`);
-      }
-
-      // 3. 更新案件狀態
-      const updatedCase = await this.prisma.case.update({
-        where: { case_id: caseId },
-        data: {
-          status: 'IN_PROGRESS',
-          updated_at: new Date()
-        }
-      });
-
-      // 4. 記錄操作日誌
-      await this.prisma.caseLog.create({
-        data: {
-          case_id: caseId,
-          user_id: caseworkerId,
-          action: '接受案件',
-          details: 'Caseworker 接受了指派的案件'
-        }
-      });
-
-      this.logger.log(`Case ${caseId} accepted by user ${caseworkerId}`);
-
-      return {
-        success: true,
-        message: '案件接受成功',
-        caseId,
-        newStatus: 'IN_PROGRESS'
-      };
-    } catch (error) {
-      this.logger.error(`Error accepting case ${caseId}: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-  /**
-   * Caseworker 拒絕指派的案件
-   */
-  async rejectCase(caseId: number, caseworkerId: number): Promise<CaseActionResponseDto> {
-    try {
-      // 1. 檢查案件是否存在且指派給當前用戶
-      const existingCase = await this.prisma.case.findUnique({
-        where: { case_id: caseId },
-        include: {
-          creator: { select: { user_id: true, username: true } },
-          assignee: { select: { user_id: true, username: true } }
-        }
-      });
-
-      if (!existingCase) {
-        throw new NotFoundException('案件不存在');
-      }
-
-      if (existingCase.assigned_to !== caseworkerId) {
-        throw new ForbiddenException('此案件未指派給您');
-      }
-
-      if (existingCase.status !== 'PENDING') {
-        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 PENDING 狀態的案件可以拒絕`);
-      }
-
-      // 2. 更新案件狀態，清空指派
-      const updatedCase = await this.prisma.case.update({
-        where: { case_id: caseId },
-        data: {
-          assigned_to: null,
-          status: 'OPEN', // 狀態回到 OPEN，等待重新指派
-          updated_at: new Date()
-        }
-      });
-
-      // 3. 記錄操作日誌
-      await this.prisma.caseLog.create({
-        data: {
-          case_id: caseId,
-          user_id: caseworkerId,
-          action: '拒絕案件',
-          details: 'Caseworker 拒絕了指派的案件，案件狀態已回到 OPEN'
-        }
-      });
-
-      this.logger.log(`Case ${caseId} rejected by user ${caseworkerId}`);
-
-      return {
-        success: true,
-        message: '案件拒絕成功，已回到待指派狀態',
-        caseId,
-        newStatus: 'OPEN'
-      };
-    } catch (error) {
-      this.logger.error(`Error rejecting case ${caseId}: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-  /**
-   * 獲取可指派的 Caseworker 列表
-   */
-  async getAvailableCaseworkers() {
-    try {
-      // 獲取所有活躍的 USER 角色用戶
-      const caseworkers = await this.prisma.user.findMany({
-        where: {
-          role: 'USER',
-          is_active: true
-        },
-        select: {
-          user_id: true,
-          username: true,
-          email: true
-        }
-      });
-
-      // 為每個 Caseworker 計算當前活躍案件數
-      const caseworkersWithStats = await Promise.all(
-        caseworkers.map(async (caseworker) => {
-          const activeCases = await this.prisma.case.count({
-            where: {
-              assigned_to: caseworker.user_id,
-              status: { in: ['PENDING', 'IN_PROGRESS'] }
-            }
-          });
-
-          return {
-            user_id: caseworker.user_id,
-            username: caseworker.username,
-            email: caseworker.email,
-            activeCases,
-            canAcceptMore: activeCases < 5
-          };
-        })
-      );
-
-      // 按照可接受能力和活躍案件數排序
-      return caseworkersWithStats.sort((a, b) => {
-        if (a.canAcceptMore && !b.canAcceptMore) return -1;
-        if (!a.canAcceptMore && b.canAcceptMore) return 1;
-        return a.activeCases - b.activeCases;
-      });
-    } catch (error) {
-      this.logger.error(`Error getting available caseworkers: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-  // 3. 修改現有的 mapCaseFields 方法，確保包含 assignee 信息
   private mapCaseFields(caseItem: any) {
     return {
       ...caseItem,
@@ -1177,7 +1265,7 @@ export class CasesService {
       created_by_id: caseItem.created_by,
       assigned_to_id: caseItem.assigned_to,
       created_by: caseItem.creator,
-      assigned_to: caseItem.assignee, // 確保包含 assignee 信息
+      assigned_to: caseItem.assignee, // 确保包含 assignee 信息
     };
   }
 }

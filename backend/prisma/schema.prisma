@@ -10,62 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  user_id    Int      @id @default(autoincrement())
-  username   String   @unique @db.VarChar(50)
-  email      String   @unique @db.VarChar(100)
-  password   String   @db.VarChar(255) // 存储哈希密码
-  role       UserRole @default(USER)
-  is_active  Boolean  @default(true)   // 用户状态
-  last_login DateTime?                 // 最后登录时间
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  // 关系：用户可以有多个案例
-  cases          Case[] @relation("CaseCreator")      // 用户创建的案件
-  assigned_cases Case[] @relation("CaseAssignee")     // 分配给用户的案件 ✅ 新增
-  case_logs      CaseLog[]
-
-  @@map("users")
-}
-
-model Case {
-  case_id     Int        @id @default(autoincrement())
-  title       String     @db.VarChar(200)
-  description String?    @db.Text
-  status      CaseStatus @default(OPEN)
-  priority    Priority   @default(MEDIUM)
-  created_by  Int
-  assigned_to Int?
-  metadata    Json?      // 用于存储文件附件等元数据信息
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
-
-  // 关系
-  creator     User      @relation("CaseCreator", fields: [created_by], references: [user_id])
-  assignee    User?     @relation("CaseAssignee", fields: [assigned_to], references: [user_id]) // ✅ 新增
-  case_logs   CaseLog[]
-
-  @@map("cases")
-}
-
-model CaseLog {
-  log_id     Int      @id @default(autoincrement())
-  case_id    Int
-  user_id    Int
-  action     String   @db.VarChar(100)
-  details    String?  @db.Text
-  created_at DateTime @default(now())
-
-  // 关系
-  case Case @relation(fields: [case_id], references: [case_id], onDelete: Cascade)
-  user User @relation(fields: [user_id], references: [user_id])
-
-  @@map("case_logs")
-}
-
-// 枚举类型
-enum UserRole {
+enum Role {
   ADMIN
   MANAGER
   USER
@@ -84,4 +29,111 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum NotificationType {
+  CASE_ASSIGNED
+  CASE_ACCEPTED
+  CASE_REJECTED
+  CASE_STATUS_CHANGED
+  CASE_PRIORITY_CHANGED
+  CASE_COMMENT_ADDED
+  SYSTEM_ANNOUNCEMENT
+}
+
+model User {
+  user_id           Int      @id @default(autoincrement())
+  username          String   @unique @db.VarChar(50)
+  email             String   @unique @db.VarChar(100)
+  password          String   @db.VarChar(255)
+  role              Role     @default(USER)
+  is_active         Boolean  @default(true)
+  last_login        DateTime?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  // Relations
+  cases             Case[]   @relation("CaseCreator")
+  assigned_cases    Case[]   @relation("CaseAssignee")
+  case_logs         CaseLog[]
+  
+  // 通知关系
+  sent_notifications     Notification[] @relation("NotificationSender")
+  received_notifications Notification[] @relation("NotificationRecipient")
+
+  @@map("users")
+}
+
+model Case {
+  case_id      Int         @id @default(autoincrement())
+  title        String      @db.VarChar(200)
+  description  String?     @db.Text
+  status       CaseStatus  @default(OPEN)
+  priority     Priority    @default(MEDIUM)
+  created_by   Int
+  assigned_to  Int?
+  due_date     DateTime?
+  metadata     Json?
+  created_at   DateTime    @default(now())
+  updated_at   DateTime    @updatedAt
+
+  // Relations
+  creator      User        @relation("CaseCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
+  assignee     User?       @relation("CaseAssignee", fields: [assigned_to], references: [user_id], onDelete: SetNull)
+  case_logs    CaseLog[]
+  
+  // 通知关系
+  notifications Notification[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([created_by])
+  @@index([assigned_to])
+  @@index([created_at])
+  @@map("cases")
+}
+
+model CaseLog {
+  log_id     Int      @id @default(autoincrement())
+  case_id    Int
+  user_id    Int
+  action     String   @db.VarChar(100)
+  details    String?  @db.Text
+  created_at DateTime @default(now())
+
+  // Relations
+  case       Case     @relation(fields: [case_id], references: [case_id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([case_id])
+  @@index([user_id])
+  @@index([created_at])
+  @@map("case_logs")
+}
+
+model Notification {
+  notification_id Int              @id @default(autoincrement())
+  type           NotificationType
+  title          String           @db.VarChar(200)
+  message        String           @db.Text
+  sender_id      Int?
+  recipient_id   Int
+  case_id        Int?
+  is_read        Boolean          @default(false)
+  read_at        DateTime?
+  metadata       Json?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+
+  // Relations
+  sender         User?            @relation("NotificationSender", fields: [sender_id], references: [user_id], onDelete: SetNull)
+  recipient      User             @relation("NotificationRecipient", fields: [recipient_id], references: [user_id], onDelete: Cascade)
+  case           Case?            @relation(fields: [case_id], references: [case_id], onDelete: Cascade)
+
+  @@index([recipient_id])
+  @@index([is_read])
+  @@index([type])
+  @@index([created_at])
+  @@index([case_id])
+  @@map("notifications")
 }

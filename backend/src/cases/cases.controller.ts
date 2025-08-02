@@ -12,6 +12,7 @@ import {
   HttpStatus,
   BadRequestException,
   Query,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -33,13 +34,14 @@ import { ParseIntPipe } from '@nestjs/common';
 import { AssignCaseDto } from './dto/assign-case.dto';
 import { CaseActionResponseDto } from './dto/case-action-response.dto';
 
-
 @ApiTags('案件管理')
 @Controller('cases')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CasesController {
-  constructor(private readonly casesService: CasesService) { }
+  private readonly logger = new Logger(CasesController.name);
+
+  constructor(private readonly casesService: CasesService) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -76,6 +78,7 @@ export class CasesController {
     description: '指派的用户不存在',
   })
   async create(@Body() createCaseDto: CreateCaseDto, @Request() req) {
+    this.logger.log(`Creating case by user ${req.user.user_id}`, 'CREATE_CASE');
     return this.casesService.create(createCaseDto, req.user.user_id);
   }
 
@@ -209,6 +212,7 @@ export class CasesController {
     description: '未授权访问',
   })
   async findAll(@Query() query: CaseQueryDto, @Request() req) {
+    this.logger.log(`Fetching cases for user ${req.user.user_id} with view: ${query.view}`, 'FETCH_CASES');
     return this.casesService.findAllWithFilters(query, req.user.user_id, req.user.role);
   }
 
@@ -258,6 +262,7 @@ export class CasesController {
     },
   })
   async getStats(@Query('period') period: string = 'month', @Request() req) {
+    this.logger.log(`Fetching stats for user ${req.user.user_id} with period: ${period}`, 'FETCH_STATS');
     return this.casesService.getStats(req.user.user_id, req.user.role, period);
   }
 
@@ -283,6 +288,7 @@ export class CasesController {
     }
   })
   async getAvailableCaseworkers(@Request() req) {
+    this.logger.log(`Fetching available caseworkers by user ${req.user.user_id}`, 'FETCH_CASEWORKERS');
     return this.casesService.getAvailableCaseworkers();
   }
 
@@ -371,6 +377,7 @@ export class CasesController {
     if (isNaN(caseId)) {
       throw new BadRequestException('案件ID必须是有效的数字');
     }
+    this.logger.log(`Fetching case ${caseId} for user ${req.user.user_id}`, 'FETCH_CASE_DETAIL');
     return this.casesService.findOne(caseId, req.user.user_id, req.user.role);
   }
 
@@ -418,6 +425,7 @@ export class CasesController {
     if (isNaN(caseId)) {
       throw new BadRequestException('案件ID必须是有效的数字');
     }
+    this.logger.log(`Updating case ${caseId} by user ${req.user.user_id}`, 'UPDATE_CASE');
     return this.casesService.update(caseId, updateCaseDto, req.user.user_id, req.user.role);
   }
 
@@ -459,45 +467,11 @@ export class CasesController {
     if (isNaN(caseId)) {
       throw new BadRequestException('案件ID必须是有效的数字');
     }
+    this.logger.log(`Deleting case ${caseId} by user ${req.user.user_id}`, 'DELETE_CASE');
     return this.casesService.remove(caseId, req.user.user_id, req.user.role);
   }
 
-
-  // 在 CasesController class 中添加以下方法：
-
-  @Patch(':id/assign')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'MANAGER') // Chair 權限
-  @ApiOperation({ summary: 'Chair 指派案件給 Caseworker' })
-  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
-  @ApiBody({ type: AssignCaseDto })
-  @ApiResponse({ status: 200, description: '案件指派成功', type: CaseActionResponseDto })
-  @ApiResponse({ status: 400, description: '業務邏輯錯誤' })
-  @ApiResponse({ status: 403, description: '權限不足' })
-  @ApiResponse({ status: 404, description: '案件或用戶不存在' })
- 
-
-  @Patch(':id/accept')
-  @UseGuards(RolesGuard)
-  @Roles('USER') // Caseworker 權限
-  @ApiOperation({ summary: 'Caseworker 接受指派的案件' })
-  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
-  @ApiResponse({ status: 200, description: '案件接受成功', type: CaseActionResponseDto })
-  @ApiResponse({ status: 400, description: '案件狀態不正確或已達案件上限' })
-  @ApiResponse({ status: 403, description: '案件未指派給當前用戶' })
-  @ApiResponse({ status: 404, description: '案件不存在' })
- 
-
-  @Patch(':id/reject')
-  @UseGuards(RolesGuard)
-  @Roles('USER') // Caseworker 權限
-  @ApiOperation({ summary: 'Caseworker 拒絕指派的案件' })
-  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
-  @ApiResponse({ status: 200, description: '案件拒絕成功', type: CaseActionResponseDto })
-  @ApiResponse({ status: 400, description: '案件狀態不正確' })
-  @ApiResponse({ status: 403, description: '案件未指派給當前用戶' })
-  @ApiResponse({ status: 404, description: '案件不存在' })
- 
+  // =================== 案件状态流转操作 ===================
 
   @Patch(':id/assign')
   @UseGuards(RolesGuard)
@@ -529,6 +503,7 @@ export class CasesController {
     @Body() assignCaseDto: AssignCaseDto,
     @Request() req,
   ): Promise<CaseActionResponseDto> {
+    this.logger.log(`Assigning case ${id} to user ${assignCaseDto.assignedCaseworkerId} by ${req.user.user_id}`, 'ASSIGN_CASE');
     return this.casesService.assignCase(id, assignCaseDto.assignedCaseworkerId, req.user);
   }
 
@@ -560,6 +535,7 @@ export class CasesController {
     @Param('id', ParseIntPipe) id: number,
     @Request() req,
   ): Promise<CaseActionResponseDto> {
+    this.logger.log(`User ${req.user.user_id} accepting case ${id}`, 'ACCEPT_CASE');
     return this.casesService.acceptCase(id, req.user.user_id);
   }
 
@@ -591,8 +567,7 @@ export class CasesController {
     @Param('id', ParseIntPipe) id: number,
     @Request() req,
   ): Promise<CaseActionResponseDto> {
+    this.logger.log(`User ${req.user.user_id} rejecting case ${id}`, 'REJECT_CASE');
     return this.casesService.rejectCase(id, req.user.user_id);
   }
-
-
 }
