@@ -11,7 +11,7 @@ import Link from 'next/link'
 
 import HealthStatus from '@/components/HealthStatus'
 import { Dashboard } from '@/components/dashboard/Dashboard'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { DashboardView } from '@/types/dashboard'
 
@@ -36,7 +36,7 @@ export default function HomePage() {
   useEffect(() => {
     const testConnection = async () => {
       try {
-        const response = await apiClient.system.getWelcome()
+        const response = await api.system.getWelcome()
         setWelcomeMessage(response.data)
         setConnectionStatus('connected')
       } catch (error) {

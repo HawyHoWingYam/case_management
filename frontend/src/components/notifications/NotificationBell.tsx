@@ -9,7 +9,11 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
-import { useNotifications } from '@/hooks/useNotifications'
+import { 
+  useNotifications, 
+  useUnreadNotificationCount,
+  useNotificationActions 
+} from '@/hooks/useNotifications'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { NotificationItem } from './NotificationItem'
 import { cn } from '@/lib/utils'
@@ -19,15 +23,9 @@ interface HeaderNotificationBellProps {
 }
 
 export function HeaderNotificationBell({ className }: HeaderNotificationBellProps) {
-  const {
-    notifications,
-    isLoading,
-    error,
-    unreadCount,
-    fetchNotifications,
-    markAsRead,
-    markAllAsRead,
-  } = useNotifications()
+  const { notifications, isLoading, error, refetch } = useNotifications()
+  const { unreadCount } = useUnreadNotificationCount()
+  const { markRead, markAllRead } = useNotificationActions()
 
   const {
     isNotificationPanelOpen,
@@ -38,25 +36,25 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
   // 添加调试日志
   useEffect(() => {
     console.log('🔔 [NotificationBell] Component mounted', {
-      unreadCount,
+      unreadCount: unreadCount || 0,
       isLoading,
       hasError: !!error,
-      notificationsCount: notifications.length,
+      notificationsCount: notifications?.length || 0,
       isPopoverOpen: isNotificationPanelOpen,
     })
-  }, [unreadCount, isLoading, error, notifications.length, isNotificationPanelOpen])
+  }, [unreadCount, isLoading, error, notifications?.length, isNotificationPanelOpen])
 
   // 自动刷新通知
   useEffect(() => {
     if (notificationPreferences?.autoRefreshInterval && !isLoading) {
       const interval = setInterval(() => {
         console.log('🔔 [NotificationBell] Auto-refreshing notifications')
-        fetchNotifications()
+        refetch()
       }, notificationPreferences.autoRefreshInterval * 1000)
 
       return () => clearInterval(interval)
     }
-  }, [notificationPreferences?.autoRefreshInterval, isLoading, fetchNotifications])
+  }, [notificationPreferences?.autoRefreshInterval, isLoading, refetch])
 
   const handleTogglePopover = (open: boolean) => {
     console.log('🔔 [NotificationBell] Toggle popover:', open)
@@ -64,7 +62,7 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
     
     if (open && !isLoading) {
       console.log('🔔 [NotificationBell] Fetching notifications on open')
-      fetchNotifications()
+      refetch()
     }
   }
 
@@ -73,7 +71,7 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
     
     if (notificationPreferences?.markAsReadOnClick) {
       try {
-        await markAsRead(notificationId)
+        markRead(notificationId)
         console.log('🔔 [NotificationBell] Marked notification as read:', notificationId)
       } catch (error) {
         console.error('🔔 [NotificationBell] Failed to mark as read:', error)
@@ -84,15 +82,16 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
   const handleMarkAllAsRead = async () => {
     console.log('🔔 [NotificationBell] Mark all as read clicked')
     try {
-      await markAllAsRead()
+      markAllRead()
       console.log('🔔 [NotificationBell] All notifications marked as read')
     } catch (error) {
       console.error('🔔 [NotificationBell] Failed to mark all as read:', error)
     }
   }
 
-  const hasUnread = unreadCount > 0
-  const displayCount = unreadCount > 99 ? '99+' : unreadCount.toString()
+  const safeUnreadCount = unreadCount || 0
+  const hasUnread = safeUnreadCount > 0
+  const displayCount = safeUnreadCount > 99 ? '99+' : safeUnreadCount.toString()
 
   return (
     <Popover open={isNotificationPanelOpen} onOpenChange={handleTogglePopover}>
@@ -105,7 +104,7 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
             hasUnread && 'text-orange-600 hover:text-orange-700',
             className
           )}
-          aria-label={`通知 ${hasUnread ? `(${unreadCount} 条未读)` : ''}`}
+          aria-label={`通知 ${hasUnread ? `(${safeUnreadCount} 条未读)` : ''}`}
         >
           {hasUnread ? (
             <BellRing className="h-5 w-5" />
@@ -145,7 +144,7 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
         </div>
 
         <div className="max-h-96 overflow-y-auto">
-          {isLoading && notifications.length === 0 ? (
+          {isLoading && (!notifications || notifications.length === 0) ? (
             <div className="flex items-center justify-center py-8">
               <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                 <Circle className="h-4 w-4 animate-spin" />
@@ -160,13 +159,13 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => fetchNotifications()}
+                onClick={() => refetch()}
                 className="mt-2 h-8 px-2 text-xs"
               >
                 重试
               </Button>
             </div>
-          ) : notifications.length === 0 ? (
+          ) : (!notifications || notifications.length === 0) ? (
             <div className="flex flex-col items-center justify-center py-8 px-4">
               <Bell className="h-8 w-8 text-muted-foreground mb-2" />
               <div className="text-sm text-muted-foreground text-center">
@@ -204,12 +203,12 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
         </div>
 
         {/* 快速操作区域 */}
-        {notifications.length > 0 && (
+        {notifications && notifications.length > 0 && (
           <div className="border-t p-2">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>共 {notifications.length} 条通知</span>
-              {unreadCount > 0 && (
-                <span>{unreadCount} 条未读</span>
+              {safeUnreadCount > 0 && (
+                <span>{safeUnreadCount} 条未读</span>
               )}
             </div>
           </div>

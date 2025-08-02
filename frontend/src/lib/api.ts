@@ -6,6 +6,8 @@ import { useAuthStore } from '@/stores/authStore'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
 console.log('🔍 [API] Base URL:', API_BASE_URL)
+console.log('🔍 [API] Environment NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL)
+console.log('🔍 [API] Default URL would be:', 'http://localhost:3001/api')
 
 // 创建axios实例
 const apiClient = axios.create({
@@ -250,6 +252,9 @@ export const api = {
   // 系统相关
   system: {
     health: (): Promise<AxiosResponse<any>> =>
+      apiClient.get('/health'),
+    
+    getHealth: (): Promise<AxiosResponse<any>> =>
       apiClient.get('/health'),
     
     info: (): Promise<AxiosResponse<any>> =>

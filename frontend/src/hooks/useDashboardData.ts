@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { DashboardView, DashboardStats as IDashboardStats, QuickAction, RecentActivity, Case } from '@/types/dashboard'
 import { useAuth } from './useAuth'
-import { apiClient } from '@/lib/api'
+import { api } from '@/lib/api'
 
 export interface DashboardData {
   stats: IDashboardStats
@@ -78,14 +78,18 @@ export function useDashboard(initialView?: DashboardView) {
       setIsError(false)
       
       const [statsRes, casesRes] = await Promise.all([
-        apiClient.cases.getStats(),
-        apiClient.cases.getByView(currentView)
+        api.cases.getStats(),
+        api.cases.getByView(currentView)
       ])
 
+      console.log('🔍 [useDashboard] Debug - casesRes:', casesRes)
+      console.log('🔍 [useDashboard] Debug - casesRes.data:', casesRes.data)
+      console.log('🔍 [useDashboard] Debug - casesRes.data.data:', casesRes.data?.data)
+      
       const newData: DashboardData = {
         stats: statsRes.data,
         recentActivity: [],
-        cases: casesRes.data || []
+        cases: casesRes.data?.data || []
       }
 
       setDashboardData(newData)

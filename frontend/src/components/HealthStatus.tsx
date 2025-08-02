@@ -14,7 +14,7 @@ import {
   MemoryStick,
   Clock
 } from 'lucide-react'
-import { apiClient, HealthStatus as HealthStatusType, ApiInfo } from '@/lib/api'
+import { api, HealthStatus as HealthStatusType, ApiInfo } from '@/lib/api'
 
 function HealthStatusComponent() {
   const [healthData, setHealthData] = useState<HealthStatusType | null>(null)
@@ -42,16 +42,21 @@ function HealthStatusComponent() {
 
   const fetchHealthData = async () => {
     console.log('🏥 [HealthStatus] Fetching health data...')
+    console.log('🏥 [HealthStatus] Debug - api object:', api)
+    console.log('🏥 [HealthStatus] Debug - api.system:', api?.system)
+    console.log('🏥 [HealthStatus] Debug - api.system.getHealth:', typeof api?.system?.getHealth)
+    console.log('🏥 [HealthStatus] Debug - api.system.info:', typeof api?.system?.info)
+    
     setLoading(true)
     setError(null)
     
     try {
       const [healthResponse, infoResponse] = await Promise.all([
-        apiClient.system.getHealth().catch((err) => {
+        api.system.getHealth().catch((err) => {
           console.warn('🏥 [HealthStatus] Health endpoint failed:', err.message)
           return null
         }),
-        apiClient.system.getInfo().catch((err) => {
+        api.system.info().catch((err) => {
           console.warn('🏥 [HealthStatus] Info endpoint failed:', err.message)
           return null
         })

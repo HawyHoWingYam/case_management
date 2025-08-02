@@ -353,6 +353,14 @@ interface RecentCasesProps {
 }
 
 function RecentCases({ cases, viewType }: RecentCasesProps) {
+  // Debug logging to identify the issue
+  console.log('🔍 [RecentCases] Debug - cases:', cases)
+  console.log('🔍 [RecentCases] Debug - cases type:', typeof cases)
+  console.log('🔍 [RecentCases] Debug - is Array:', Array.isArray(cases))
+  console.log('🔍 [RecentCases] Debug - cases.data:', cases?.data)
+  console.log('🔍 [RecentCases] Debug - cases.data type:', typeof cases?.data)
+  console.log('🔍 [RecentCases] Debug - cases.data is Array:', Array.isArray(cases?.data))
+  
   const getViewTitle = (view: DashboardView) => {
     const titles = {
       'my_cases': '我的案件',
@@ -378,9 +386,10 @@ function RecentCases({ cases, viewType }: RecentCasesProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {cases.length === 0 ? (
+        {/* Safety check to ensure cases is an array */}
+        {!Array.isArray(cases) || cases.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
-            暂无相关案件
+            {!Array.isArray(cases) ? '数据格式错误' : '暂无相关案件'}
           </p>
         ) : (
           <div className="space-y-4">
