@@ -121,7 +121,14 @@ export const useAuthStore = create<AuthState>()(
       // 权限检查方法
       hasRole: (roles: string[]) => {
         const { user } = get()
-        return user ? roles.includes(user.role) : false
+        const hasAccess = user ? roles.includes(user.role) : false
+        console.log('🔐 [AuthStore] hasRole check:', {
+          requiredRoles: roles,
+          userRole: user?.role,
+          hasAccess,
+          user: user?.username
+        })
+        return hasAccess
       },
 
       // 检查是否为管理员

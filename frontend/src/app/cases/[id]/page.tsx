@@ -114,7 +114,18 @@ export default function CaseDetailPage() {
   // 检查用户权限
   const canEditCase = () => {
     if (!caseData) return false
-    if (hasRole(['ADMIN', 'MANAGER'])) return true
+    
+    // ADMIN 只能修改未被指派的案件
+    if (hasRole(['ADMIN'])) {
+      return !caseData.assigned_to_id
+    }
+    
+    // MANAGER 只能修改未被指派的案件
+    if (hasRole(['MANAGER'])) {
+      return !caseData.assigned_to_id
+    }
+    
+    // USER 可以修改自己创建的案件
     return caseData.created_by_id === user?.user_id
   }
 

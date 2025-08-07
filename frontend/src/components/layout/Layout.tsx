@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import Header from './Header'
-import { HealthStatus } from '../HealthStatus'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -99,9 +98,6 @@ export default function Layout({ children }: LayoutProps) {
               </div>
               
               <div className="flex items-center gap-4">
-                {/* 系统健康状态 */}
-                <HealthStatus />
-                
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>版本 v1.0.0</span>
                   <span>•</span>

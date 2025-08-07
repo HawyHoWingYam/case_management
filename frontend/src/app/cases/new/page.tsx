@@ -200,9 +200,14 @@ export default function CreateCasePage() {
             <p>
               <strong>文件附件：</strong>可以上传相关的截图、文档等文件，有助于问题的诊断和解决。
             </p>
-            {hasRole(['ADMIN', 'MANAGER']) && (
+            {hasRole(['ADMIN']) && (
               <p>
-                <strong>案件指派：</strong>作为管理员/经理，您可以在创建时直接指派案件给团队成员，或创建后再进行指派。
+                <strong>案件指派：</strong>作为管理员，您可以在创建时直接指派案件给团队成员，或创建后再进行指派。
+              </p>
+            )}
+            {hasRole(['MANAGER']) && (
+              <p>
+                <strong>案件指派：</strong>作为经理，您必须在创建时指派案件给团队成员处理。
               </p>
             )}
           </div>

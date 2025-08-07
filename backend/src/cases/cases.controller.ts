@@ -45,7 +45,7 @@ export class CasesController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('USER', 'MANAGER', 'ADMIN')
+  @Roles('USER', 'MANAGER', 'ADMIN') // 允许MANAGER创建案件以便指派
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: '创建新案件' })
   @ApiBody({

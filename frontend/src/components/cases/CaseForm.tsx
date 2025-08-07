@@ -160,6 +160,12 @@ export function CaseForm({
       console.log('🔍 [CaseForm] Original form values:', values)
       console.log('🔍 [CaseForm] values.assigned_to_id:', values.assigned_to_id, 'type:', typeof values.assigned_to_id)
       
+      // MANAGER 角色验证：必须指派案件给某人
+      if (mode === 'create' && hasRole(['MANAGER']) && (!values.assigned_to_id || values.assigned_to_id === 'unassigned')) {
+        setSubmitError('作为 MANAGER，您必须指派案件给处理人员')
+        return
+      }
+      
       // 處理 assigned_to_id：轉換為數字或 undefined
       let assignedToId: number | undefined = undefined
       if (values.assigned_to_id && values.assigned_to_id !== 'unassigned') {
@@ -393,7 +399,12 @@ export function CaseForm({
                       name="assigned_to_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>指派给</FormLabel>
+                          <FormLabel>
+                            指派给
+                            {hasRole(['MANAGER']) && mode === 'create' && (
+                              <span className="text-red-500 ml-1">*</span>
+                            )}
+                          </FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
@@ -401,11 +412,17 @@ export function CaseForm({
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder={loadingCaseworkers ? "加载中..." : "选择处理人员"} />
+                                <SelectValue placeholder={
+                                  loadingCaseworkers ? "加载中..." : 
+                                  (hasRole(['MANAGER']) && mode === 'create') ? "必须选择处理人员" : "选择处理人员"
+                                } />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="unassigned">不指派</SelectItem>
+                              {/* MANAGER 创建案件时不能选择 "不指派" */}
+                              {!(hasRole(['MANAGER']) && mode === 'create') && (
+                                <SelectItem value="unassigned">不指派</SelectItem>
+                              )}
                               {availableCaseworkers.map((caseworker) => (
                                 <SelectItem key={caseworker.user_id} value={caseworker.user_id.toString()}>
                                   <div className="flex items-center space-x-2">
@@ -428,7 +445,10 @@ export function CaseForm({
                             </SelectContent>
                           </Select>
                           <FormDescription>
-                            选择负责处理这个案件的人员
+                            {hasRole(['MANAGER']) && mode === 'create' ? 
+                              '作为 MANAGER，您必须选择负责处理这个案件的人员' : 
+                              '选择负责处理这个案件的人员（可选）'
+                            }
                           </FormDescription>
                           <FormMessage />
                         </FormItem>

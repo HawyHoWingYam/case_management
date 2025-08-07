@@ -51,11 +51,14 @@ apiClient.interceptors.response.use(
     return response
   },
   (error) => {
-    console.error('🔍 [API] Response Error:', {
+    const errorInfo = {
       status: error.response?.status,
       url: error.config?.url,
-      message: error.response?.data?.message || error.message
-    })
+      method: error.config?.method?.toUpperCase(),
+      message: error.response?.data?.message || error.message,
+      data: error.response?.data
+    }
+    console.error('🔍 [API] Response Error:', errorInfo)
 
     // 如果是401错误，清除认证状态并重定向到登录页
     if (error.response?.status === 401) {
@@ -247,6 +250,111 @@ export const api = {
       apiClient.get(`/files/download/${filename}`, {
         responseType: 'blob',
       }),
+  },
+
+  // 通知相关
+  notifications: {
+    getAll: async (params?: any): Promise<AxiosResponse<any>> => {
+      console.log('🔔 [API] Fetching notifications with params:', params)
+      try {
+        const response = await apiClient.get('/notifications', { params })
+        console.log('🔔 [API] Notifications response:', response.data)
+        
+        // 确保返回正确的数据结构
+        if (!response.data) {
+          console.warn('🔔 [API] Empty response data, returning default structure')
+          return {
+            ...response,
+            data: { 
+              data: [],
+              notifications: [], 
+              total: 0, 
+              unread: 0,
+              meta: { total: 0, page: 1, limit: 10, totalPages: 0, hasNextPage: false, hasPreviousPage: false }
+            }
+          }
+        }
+        
+        // 如果后端返回的是 { notifications: [], total: 0, unread: 0 } 格式
+        // 需要转换为前端期望的格式
+        if (response.data.notifications && Array.isArray(response.data.notifications)) {
+          return {
+            ...response,
+            data: {
+              data: response.data.notifications, // 前端期望的字段
+              notifications: response.data.notifications, // 保持兼容性
+              total: response.data.total || 0,
+              unread: response.data.unread || 0,
+              meta: {
+                total: response.data.total || 0,
+                page: params?.page || 1,
+                limit: params?.limit || 10,
+                totalPages: Math.ceil((response.data.total || 0) / (params?.limit || 10)),
+                hasNextPage: false,
+                hasPreviousPage: false
+              }
+            }
+          }
+        }
+        
+        return response
+      } catch (error: any) {
+        console.error('🔔 [API] Error fetching notifications:', error)
+        throw error
+      }
+    },
+    
+    getStats: async (): Promise<AxiosResponse<any>> => {
+      console.log('🔔 [API] Fetching notification stats')
+      try {
+        const response = await apiClient.get('/notifications/stats')
+        console.log('🔔 [API] Stats response:', response.data)
+        
+        // 确保返回正确的数据结构
+        if (!response.data) {
+          return {
+            ...response,
+            data: { total: 0, unread: 0, read: 0, byType: {} }
+          }
+        }
+        
+        return response
+      } catch (error: any) {
+        console.error('🔔 [API] Error fetching notification stats:', error)
+        throw error
+      }
+    },
+    
+    getUnreadCount: async (): Promise<AxiosResponse<any>> => {
+      console.log('🔔 [API] Fetching unread count')
+      try {
+        const response = await apiClient.get('/notifications/stats')
+        console.log('🔔 [API] Unread count stats response:', response.data)
+        
+        return {
+          ...response,
+          data: { unreadCount: response.data?.unread || 0 }
+        }
+      } catch (error: any) {
+        console.error('🔔 [API] Error fetching unread count:', error)
+        throw error
+      }
+    },
+    
+    markRead: (id: number): Promise<AxiosResponse<any>> => {
+      console.log('🔔 [API] Marking notification as read:', id)
+      return apiClient.patch(`/notifications/${id}/read`)
+    },
+    
+    markAllRead: (): Promise<AxiosResponse<any>> => {
+      console.log('🔔 [API] Marking all notifications as read')
+      return apiClient.patch('/notifications/read-all')
+    },
+    
+    delete: (id: number): Promise<AxiosResponse<any>> => {
+      console.log('🔔 [API] Deleting notification:', id)
+      return apiClient.delete(`/notifications/${id}`)
+    },
   },
 
   // 系统相关

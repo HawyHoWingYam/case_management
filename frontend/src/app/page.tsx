@@ -6,10 +6,9 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { FileText, Users, Clock, CheckCircle, AlertCircle, Plus, Activity, LogIn } from 'lucide-react'
+import { FileText, Users, Clock, CheckCircle, AlertCircle, Plus, LogIn } from 'lucide-react'
 import Link from 'next/link'
 
-import HealthStatus from '@/components/HealthStatus'
 import { Dashboard } from '@/components/dashboard/Dashboard'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -18,7 +17,6 @@ import { DashboardView } from '@/types/dashboard'
 export default function HomePage() {
   const searchParams = useSearchParams()
   const [welcomeMessage, setWelcomeMessage] = useState<string>('')
-  const [connectionStatus, setConnectionStatus] = useState<'loading' | 'connected' | 'error'>('loading')
   const [mounted, setMounted] = useState(false)
 
   const { isAuthenticated, user } = useAuthStore()
@@ -38,10 +36,8 @@ export default function HomePage() {
       try {
         const response = await api.system.getWelcome()
         setWelcomeMessage(response.data)
-        setConnectionStatus('connected')
       } catch (error) {
         console.error('连接测试失败:', error)
-        setConnectionStatus('error')
       }
     }
 
@@ -55,8 +51,7 @@ export default function HomePage() {
   // 如果用户未登录，显示欢迎页面
   if (!isAuthenticated) {
     return <WelcomePage 
-      welcomeMessage={welcomeMessage} 
-      connectionStatus={connectionStatus} 
+      welcomeMessage={welcomeMessage}
     />
   }
 
@@ -67,28 +62,19 @@ export default function HomePage() {
       <UserWelcomeHeader 
         user={user} 
         welcomeMessage={welcomeMessage}
-        connectionStatus={connectionStatus}
       />
-
-      {/* 系统健康状态监控 */}
-      <HealthStatus />
 
       {/* 主仪表板 */}
       <Dashboard initialView={initialView} />
-
-      {/* 系统状态确认 */}
-      <SystemStatusCard />
     </div>
   )
 }
 
 // 欢迎页面组件（未登录用户）
 function WelcomePage({ 
-  welcomeMessage, 
-  connectionStatus 
+  welcomeMessage
 }: { 
   welcomeMessage: string
-  connectionStatus: 'loading' | 'connected' | 'error'
 }) {
   return (
     <div className="space-y-6">
@@ -107,18 +93,6 @@ function WelcomePage({
         )}
       </div>
 
-      {/* 系统状态 */}
-      <div className="flex justify-center">
-        <Badge 
-          variant={connectionStatus === 'connected' ? 'default' : 'destructive'}
-          className={connectionStatus === 'loading' ? 'animate-pulse' : ''}
-        >
-          <Activity className="mr-1 h-3 w-3" />
-          {connectionStatus === 'loading' && '系统检查中...'}
-          {connectionStatus === 'connected' && '系统运行正常'}
-          {connectionStatus === 'error' && '系统连接异常'}
-        </Badge>
-      </div>
 
       {/* 功能介绍 */}
       <div className="grid gap-6 md:grid-cols-3">
@@ -145,9 +119,9 @@ function WelcomePage({
         <Card>
           <CardHeader>
             <CheckCircle className="h-8 w-8 text-purple-600 mb-2" />
-            <CardTitle>实时监控</CardTitle>
+            <CardTitle>数据统计</CardTitle>
             <CardDescription>
-              实时系统状态监控，案例处理进度跟踪和数据统计
+              案例处理进度跟踪和数据统计分析
             </CardDescription>
           </CardHeader>
         </Card>
@@ -174,8 +148,6 @@ function WelcomePage({
         </CardContent>
       </Card>
 
-      {/* 系统健康状态 */}
-      <HealthStatus />
     </div>
   )
 }
@@ -183,12 +155,10 @@ function WelcomePage({
 // 用户欢迎头部组件
 function UserWelcomeHeader({ 
   user, 
-  welcomeMessage, 
-  connectionStatus 
+  welcomeMessage
 }: {
   user: any
   welcomeMessage: string
-  connectionStatus: 'loading' | 'connected' | 'error'
 }) {
   const getRoleLabel = (role: string) => {
     const labels = {
@@ -219,46 +189,17 @@ function UserWelcomeHeader({
       </div>
       
       <div className="flex items-center gap-2">
-        {/* 连接状态指示器 */}
-        <Badge 
-          variant={connectionStatus === 'connected' ? 'default' : 'destructive'}
-          className={connectionStatus === 'loading' ? 'animate-pulse' : ''}
-        >
-          <Activity className="mr-1 h-3 w-3" />
-          {connectionStatus === 'loading' && '连接中...'}
-          {connectionStatus === 'connected' && '后端已连接'}
-          {connectionStatus === 'error' && '后端连接失败'}
-        </Badge>
-        
-        {/* 快速创建按钮 */}
-        <Link href="/cases/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            新建案例
-          </Button>
-        </Link>
+        {/* 快速创建按钮 - 只有 ADMIN 和 USER 可以创建案例 */}
+        {user && (user.role === 'ADMIN' || user.role === 'USER') && (
+          <Link href="/cases/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              新建案例
+            </Button>
+          </Link>
+        )}
       </div>
     </div>
   )
 }
 
-// 系统状态确认卡片
-function SystemStatusCard() {
-  return (
-    <Card className="border-green-200 bg-green-50 dark:bg-green-950">
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-2">
-          <CheckCircle className="h-5 w-5 text-green-600" />
-          <div>
-            <p className="font-medium text-green-800 dark:text-green-200">
-              🎉 系统运行正常，认证成功！
-            </p>
-            <p className="text-sm text-green-700 dark:text-green-300">
-              前端认证系统与后端 API 连接正常，用户权限管理已生效。基于角色的仪表板正在运行。
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}

@@ -322,8 +322,9 @@ export class CasesService {
       // 权限检查：普通用户只能查看自己相关的案件
       if (userRole === 'USER') {
         const canAccess =
-          caseData.created_by === userId ||
-          caseData.assigned_to === userId;
+          caseData.created_by === userId ||           // Cases created by them
+          caseData.assigned_to === userId ||          // Cases assigned to them  
+          caseData.assigned_to === null;              // Unassigned cases (can be picked up)
 
         if (!canAccess) {
           throw new ForbiddenException('没有权限访问此案件');
@@ -346,9 +347,19 @@ export class CasesService {
       // 先检查案件是否存在
       const existingCase = await this.findOne(id, userId, userRole);
 
-      // 权限检查：普通用户只能更新自己创建的案件
+      // 权限检查
       if (userRole === 'USER' && existingCase.created_by_id !== userId) {
         throw new ForbiddenException('没有权限修改此案件');
+      }
+      
+      // ADMIN 只能修改未被指派的案件
+      if (userRole === 'ADMIN' && existingCase.assigned_to_id) {
+        throw new ForbiddenException('ADMIN 只能修改未被指派的案件');
+      }
+      
+      // MANAGER 只能修改未被指派的案件
+      if (userRole === 'MANAGER' && existingCase.assigned_to_id) {
+        throw new ForbiddenException('MANAGER 只能修改未被指派的案件');
       }
 
       // 如果要更新 assigned_to，验证用户是否存在
@@ -960,10 +971,16 @@ export class CasesService {
     // 根据视图类型构建基础条件
     switch (view) {
       case 'my_cases':
-        whereCondition.OR = [
-          { created_by: userId },
-          { assigned_to: userId },
-        ];
+        if (userRole === 'USER') {
+          // Case worker 的"我的案件"只包括被指派给自己的案件
+          whereCondition.assigned_to = userId;
+        } else {
+          // ADMIN 和 MANAGER 的"我的案件"包括创建的和指派的
+          whereCondition.OR = [
+            { created_by: userId },
+            { assigned_to: userId },
+          ];
+        }
         break;
       case 'assigned':
         whereCondition.assigned_to = userId;
@@ -995,9 +1012,10 @@ export class CasesService {
       default:
         // 根据用户角色限制可见性
         if (userRole === 'USER') {
+          // Case worker 只能看到自己被指派的案件和未被指派的案件
           whereCondition.OR = [
-            { created_by: userId },
-            { assigned_to: userId },
+            { assigned_to: userId },  // 指派给自己的案件
+            { assigned_to: null },    // 未被指派的案件
           ];
         }
         // ADMIN 和 MANAGER 可以查看所有案件
@@ -1105,10 +1123,11 @@ export class CasesService {
    */
   private getBaseWhereForRole(userId: number, userRole: string): Prisma.CaseWhereInput {
     if (userRole === 'USER') {
+      // Case worker 只能看到：1. 自己被指派的案件 2. 未被指派的案件
       return {
         OR: [
-          { created_by: userId },
-          { assigned_to: userId },
+          { assigned_to: userId }, // 指派给自己的案件
+          { assigned_to: null },    // 未被指派的案件
         ],
       };
     }
