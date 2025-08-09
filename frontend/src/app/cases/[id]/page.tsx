@@ -35,6 +35,8 @@ import { Case } from '@/types/case'
 import { CaseStatusBadge, CasePriorityBadge } from '@/components/cases/CaseStatusBadge'
 import { CaseAcceptReject } from '@/components/cases/CaseAcceptReject'
 import { CaseAssignment } from '@/components/cases/CaseAssignment'  // 新增：导入Chair指派组件
+import { CaseCompletionActions } from '@/components/cases/CaseCompletionActions'  // 新增：导入完成流程组件
+import { CaseLogHistory } from '@/components/cases/CaseLogHistory'  // 新增：导入历史记录组件
 import { toast } from 'sonner'
 
 export default function CaseDetailPage() {
@@ -439,43 +441,18 @@ export default function CaseDetailPage() {
         className="mb-6"
       />
 
-      {/* 操作日志 */}
-      {caseData.case_logs && caseData.case_logs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>操作日志</CardTitle>
-            <CardDescription>
-              案件的所有操作记录和状态变更历史
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {caseData.case_logs.map((log, logIndex) => (
-                <div key={`log-${log.id || logIndex}`} className="flex items-start space-x-3 pb-3 border-b last:border-b-0">
-                  <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{log.action}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(log.created_at)}
-                      </p>
-                    </div>
-                    {log.details && (
-                      <p className="text-sm text-muted-foreground">{log.details}</p>
-                    )}
-                    <div className="flex items-center space-x-2">
-                      <User className="h-3 w-3" />
-                      <span className="text-xs text-muted-foreground">
-                        {log.user?.username || '系统'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* 案件完成流程操作 - 新增：显示完成请求和审批功能 */}
+      <CaseCompletionActions
+        caseData={caseData}
+        onCaseUpdate={handleCaseUpdate}
+        className="mb-6"
+      />
+
+      {/* 案件历史记录 - 新增：替换原有的操作日志显示 */}
+      <CaseLogHistory
+        caseData={caseData}
+        className="mb-6"
+      />
     </div>
   )
 }

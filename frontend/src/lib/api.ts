@@ -228,6 +228,23 @@ export const api = {
     rejectCase: (id: number): Promise<AxiosResponse<any>> =>
       apiClient.patch(`/cases/${id}/reject`),
     
+    // 案件完成流程
+    requestCompletion: (id: number): Promise<AxiosResponse<any>> =>
+      apiClient.patch(`/cases/${id}/request-completion`),
+    
+    approveCompletion: (id: number): Promise<AxiosResponse<any>> =>
+      apiClient.patch(`/cases/${id}/approve`),
+    
+    rejectCompletion: (id: number): Promise<AxiosResponse<any>> =>
+      apiClient.patch(`/cases/${id}/reject-completion`),
+    
+    // 案件日志
+    addCaseLog: (id: number, logEntry: string): Promise<AxiosResponse<any>> =>
+      apiClient.post(`/cases/${id}/logs`, { log_entry: logEntry }),
+    
+    getCaseLogs: (id: number): Promise<AxiosResponse<any[]>> =>
+      apiClient.get(`/cases/${id}/logs`),
+    
     // 视图相关
     getByView: (view: string): Promise<AxiosResponse<PaginatedResponse<Case>>> =>
       apiClient.get('/cases', { params: { view } }),

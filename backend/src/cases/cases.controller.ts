@@ -570,4 +570,174 @@ export class CasesController {
     this.logger.log(`User ${req.user.user_id} rejecting case ${id}`, 'REJECT_CASE');
     return this.casesService.rejectCase(id, req.user.user_id);
   }
+
+  // =================== 案件完成流程操作 ===================
+
+  @Patch(':id/request-completion')
+  @UseGuards(RolesGuard)
+  @Roles('USER') // Caseworker 權限
+  @ApiOperation({ summary: 'Caseworker 请求完成案件' })
+  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: '请求完成成功',
+    type: CaseActionResponseDto
+  })
+  @ApiResponse({
+    status: 400,
+    description: '案件狀態不正確',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: '案件狀態為 PENDING，只有 IN_PROGRESS 狀態的案件可以請求完成' },
+        error: { type: 'string', example: 'Bad Request' }
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: '案件未指派給當前用戶' })
+  @ApiResponse({ status: 404, description: '案件不存在' })
+  async requestCompletion(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+  ): Promise<CaseActionResponseDto> {
+    this.logger.log(`User ${req.user.user_id} requesting completion for case ${id}`, 'REQUEST_COMPLETION');
+    return this.casesService.requestCompletion(id, req.user.user_id);
+  }
+
+  @Patch(':id/approve')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'MANAGER') // Chair 權限
+  @ApiOperation({ summary: 'Chair 批准完成案件' })
+  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: '批准完成成功',
+    type: CaseActionResponseDto
+  })
+  @ApiResponse({
+    status: 400,
+    description: '案件狀態不正確',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: '案件狀態為 IN_PROGRESS，只有 PENDING_COMPLETION_REVIEW 狀態的案件可以批准' },
+        error: { type: 'string', example: 'Bad Request' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: '案件不存在' })
+  async approveCompletion(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+  ): Promise<CaseActionResponseDto> {
+    this.logger.log(`User ${req.user.user_id} approving completion for case ${id}`, 'APPROVE_COMPLETION');
+    return this.casesService.approveCompletion(id, req.user.user_id);
+  }
+
+  @Patch(':id/reject-completion')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'MANAGER') // Chair 權限
+  @ApiOperation({ summary: 'Chair 拒绝完成案件' })
+  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: '拒绝完成成功',
+    type: CaseActionResponseDto
+  })
+  @ApiResponse({
+    status: 400,
+    description: '案件狀態不正確',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: '案件狀態為 IN_PROGRESS，只有 PENDING_COMPLETION_REVIEW 狀態的案件可以拒绝' },
+        error: { type: 'string', example: 'Bad Request' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: '案件不存在' })
+  async rejectCompletion(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+  ): Promise<CaseActionResponseDto> {
+    this.logger.log(`User ${req.user.user_id} rejecting completion for case ${id}`, 'REJECT_COMPLETION');
+    return this.casesService.rejectCompletion(id, req.user.user_id);
+  }
+
+  // =================== 案件日志操作 ===================
+
+  @Post(':id/logs')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'MANAGER', 'USER')
+  @ApiOperation({ summary: '添加案件日志' })
+  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        log_entry: { type: 'string', description: '日志备注内容' },
+      },
+      required: ['log_entry'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: '日志添加成功',
+    schema: {
+      type: 'object',
+      properties: {
+        log_id: { type: 'number', example: 123 },
+        message: { type: 'string', example: '日志添加成功' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: '案件不存在' })
+  async addCaseLog(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('log_entry') logEntry: string,
+    @Request() req,
+  ) {
+    this.logger.log(`User ${req.user.user_id} adding log to case ${id}`, 'ADD_CASE_LOG');
+    return this.casesService.addCaseLog(id, req.user.user_id, logEntry);
+  }
+
+  @Get(':id/logs')
+  @ApiOperation({ summary: '获取案件日志列表' })
+  @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: '获取日志成功',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          log_id: { type: 'number', example: 123 },
+          case_id: { type: 'number', example: 1 },
+          user_id: { type: 'number', example: 2 },
+          action: { type: 'string', example: '手动备注' },
+          details: { type: 'string', example: '这是一条手动添加的备注' },
+          created_at: { type: 'string', example: '2025-08-07T10:30:00.000Z' },
+          user: {
+            type: 'object',
+            properties: {
+              user_id: { type: 'number', example: 2 },
+              username: { type: 'string', example: 'john_doe' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: '案件不存在' })
+  async getCaseLogs(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+  ) {
+    this.logger.log(`User ${req.user.user_id} fetching logs for case ${id}`, 'GET_CASE_LOGS');
+    return this.casesService.getCaseLogs(id);
+  }
 }

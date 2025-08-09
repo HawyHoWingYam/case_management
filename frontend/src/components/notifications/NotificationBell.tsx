@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect } from 'react'
-import { Bell, BellRing, Circle } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Bell, BellRing, Circle, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   useNotifications, 
   useUnreadNotificationCount,
@@ -16,6 +17,8 @@ import {
 } from '@/hooks/useNotifications'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { NotificationItem } from './NotificationItem'
+import NotificationFilters, { type NotificationFilters } from './NotificationFilters'
+import NotificationBatchActions, { NotificationCheckbox } from './NotificationBatchActions'
 import { cn } from '@/lib/utils'
 
 interface HeaderNotificationBellProps {
@@ -32,6 +35,19 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
     setNotificationPanelOpen,
     notificationPreferences,
   } = useNotificationStore()
+
+  // Stage 3 Goal 3: Enhanced notification filtering and batch operations state
+  const [filters, setFilters] = useState<NotificationFilters>({
+    types: [],
+    status: 'all',
+    dateRange: 'all',
+    search: '',
+    priority: 'all',
+    actionType: [],
+  })
+  
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [activeTab, setActiveTab] = useState('all')
 
   // 添加调试日志
   useEffect(() => {
@@ -89,6 +105,120 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
     }
   }
 
+  // Stage 3 Goal 3: Enhanced notification filtering logic
+  const getFilteredNotifications = () => {
+    if (!notifications) return []
+    
+    console.log('🔔 [NotificationBell] Filtering notifications:', {
+      totalCount: notifications.length,
+      filters,
+      activeTab
+    })
+
+    let filtered = [...notifications]
+
+    // Filter by tab
+    if (activeTab === 'unread') {
+      filtered = filtered.filter(n => !n.is_read)
+    } else if (activeTab === 'read') {
+      filtered = filtered.filter(n => n.is_read)
+    }
+
+    // Filter by status
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(n => 
+        filters.status === 'read' ? n.is_read : !n.is_read
+      )
+    }
+
+    // Filter by types
+    if (filters.types.length > 0) {
+      filtered = filtered.filter(n => filters.types.includes(n.type))
+    }
+
+    // Filter by action types (Stage 3 Goal 3: Completion workflow)
+    if (filters.actionType.length > 0) {
+      filtered = filtered.filter(n => 
+        n.metadata?.action_type && filters.actionType.includes(n.metadata.action_type)
+      )
+    }
+
+    // Filter by search
+    if (filters.search.trim()) {
+      const search = filters.search.toLowerCase()
+      filtered = filtered.filter(n =>
+        n.title.toLowerCase().includes(search) ||
+        n.message.toLowerCase().includes(search) ||
+        n.sender?.username?.toLowerCase().includes(search) ||
+        n.case?.title?.toLowerCase().includes(search)
+      )
+    }
+
+    // Filter by priority (based on metadata)
+    if (filters.priority !== 'all') {
+      filtered = filtered.filter(n => {
+        if (filters.priority === 'high') {
+          return n.metadata?.action_type && [
+            'COMPLETION_REQUEST',
+            'COMPLETION_APPROVED', 
+            'COMPLETION_REJECTED'
+          ].includes(n.metadata.action_type)
+        }
+        return true
+      })
+    }
+
+    // Filter by date range
+    if (filters.dateRange !== 'all') {
+      const now = new Date()
+      const filterDate = new Date()
+      
+      switch (filters.dateRange) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0)
+          break
+        case 'week':
+          filterDate.setDate(now.getDate() - 7)
+          break
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1)
+          break
+      }
+      
+      filtered = filtered.filter(n => new Date(n.created_at) >= filterDate)
+    }
+
+    console.log('🔔 [NotificationBell] Filtered notifications:', {
+      originalCount: notifications.length,
+      filteredCount: filtered.length,
+      filters
+    })
+
+    return filtered
+  }
+
+  const filteredNotifications = getFilteredNotifications()
+
+  // Handle batch operations
+  const handleBatchAction = (action: string, ids: number[]) => {
+    console.log('🔔 [NotificationBell] Batch action:', { action, ids })
+    
+    switch (action) {
+      case 'mark_read':
+      case 'mark_unread':
+      case 'delete':
+        refetch() // Refresh notifications after batch operation
+        break
+    }
+  }
+
+  // Clear selections when popover closes
+  useEffect(() => {
+    if (!isNotificationPanelOpen) {
+      setSelectedIds([])
+    }
+  }, [isNotificationPanelOpen])
+
   const safeUnreadCount = unreadCount || 0
   const hasUnread = safeUnreadCount > 0
   const displayCount = safeUnreadCount > 99 ? '99+' : safeUnreadCount.toString()
@@ -124,95 +254,156 @@ export function HeaderNotificationBell({ className }: HeaderNotificationBellProp
       </PopoverTrigger>
 
       <PopoverContent 
-        className="w-80 p-0" 
+        className="w-[480px] p-0" 
         align="end"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="font-semibold">通知</h3>
-          {hasUnread && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleMarkAllAsRead}
-              disabled={isLoading}
-              className="h-8 px-2 text-xs"
-            >
-              全部已读
-            </Button>
-          )}
-        </div>
-
-        <div className="max-h-96 overflow-y-auto">
-          {isLoading && (!notifications || notifications.length === 0) ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <Circle className="h-4 w-4 animate-spin" />
-                <span>加载中...</span>
-              </div>
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-8 px-4">
-              <div className="text-sm text-red-600 text-center">
-                加载通知失败
-              </div>
+          <h3 className="font-semibold">通知中心</h3>
+          <div className="flex items-center gap-2">
+            {hasUnread && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => refetch()}
-                className="mt-2 h-8 px-2 text-xs"
+                onClick={handleMarkAllAsRead}
+                disabled={isLoading}
+                className="h-8 px-2 text-xs"
               >
-                重试
+                全部已读
               </Button>
-            </div>
-          ) : (!notifications || notifications.length === 0) ? (
-            <div className="flex flex-col items-center justify-center py-8 px-4">
-              <Bell className="h-8 w-8 text-muted-foreground mb-2" />
-              <div className="text-sm text-muted-foreground text-center">
-                暂无通知
-              </div>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {notifications.slice(0, 10).map((notification) => (
-                <NotificationItem
-                  key={notification.notification_id}
-                  notification={notification}
-                  onClick={() => handleNotificationClick(notification.notification_id)}
-                />
-              ))}
-              
-              {notifications.length > 10 && (
-                <div className="p-3 text-center">
+            )}
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="px-4 py-2 border-b">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="all" className="text-xs">
+                全部 {notifications ? `(${notifications.length})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="unread" className="text-xs">
+                未读 {safeUnreadCount > 0 ? `(${safeUnreadCount})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="read" className="text-xs">
+                已读
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <div className="p-2 border-b">
+            <NotificationFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              notificationCounts={{
+                total: notifications?.length || 0,
+                unread: safeUnreadCount,
+                byType: {}, // This would be calculated from notifications
+              }}
+            />
+          </div>
+
+          <div className="px-2">
+            <NotificationBatchActions
+              notifications={filteredNotifications}
+              selectedIds={selectedIds}
+              onSelectedIdsChange={setSelectedIds}
+              onBatchAction={handleBatchAction}
+            />
+          </div>
+
+          <TabsContent value={activeTab} className="mt-0">
+            <div className="max-h-96 overflow-y-auto">
+              {isLoading && (!notifications || notifications.length === 0) ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <Circle className="h-4 w-4 animate-spin" />
+                    <span>加载中...</span>
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4">
+                  <div className="text-sm text-red-600 text-center">
+                    加载通知失败
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      // 这里可以导航到完整的通知页面
-                      console.log('🔔 [NotificationBell] View all notifications clicked')
-                      setNotificationPanelOpen(false)
-                    }}
-                    className="h-8 px-2 text-xs text-muted-foreground"
+                    onClick={() => refetch()}
+                    className="mt-2 h-8 px-2 text-xs"
                   >
-                    查看全部 ({notifications.length})
+                    重试
                   </Button>
+                </div>
+              ) : filteredNotifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4">
+                  <Bell className="h-8 w-8 text-muted-foreground mb-2" />
+                  <div className="text-sm text-muted-foreground text-center">
+                    {notifications && notifications.length > 0 ? '没有符合条件的通知' : '暂无通知'}
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredNotifications.slice(0, 20).map((notification) => (
+                    <div key={notification.notification_id} className="flex items-start gap-2 px-2">
+                      <NotificationCheckbox
+                        notification={notification}
+                        selected={selectedIds.includes(notification.notification_id)}
+                        onSelectedChange={(selected) => {
+                          if (selected) {
+                            setSelectedIds([...selectedIds, notification.notification_id])
+                          } else {
+                            setSelectedIds(selectedIds.filter(id => id !== notification.notification_id))
+                          }
+                        }}
+                        isBatchMode={selectedIds.length > 0 || false} // Simple batch mode detection
+                      />
+                      <div className="flex-1">
+                        <NotificationItem
+                          notification={notification}
+                          onClick={() => handleNotificationClick(notification.notification_id)}
+                          compact
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {filteredNotifications.length > 20 && (
+                    <div className="p-3 text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          console.log('🔔 [NotificationBell] View all notifications clicked')
+                          setNotificationPanelOpen(false)
+                        }}
+                        className="h-8 px-2 text-xs text-muted-foreground"
+                      >
+                        查看全部 ({filteredNotifications.length})
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </TabsContent>
 
-        {/* 快速操作区域 */}
-        {notifications && notifications.length > 0 && (
-          <div className="border-t p-2">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>共 {notifications.length} 条通知</span>
-              {safeUnreadCount > 0 && (
-                <span>{safeUnreadCount} 条未读</span>
-              )}
+          {/* 统计信息 */}
+          {filteredNotifications.length > 0 && (
+            <div className="border-t p-2">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>
+                  显示 {Math.min(filteredNotifications.length, 20)} / {filteredNotifications.length} 条通知
+                </span>
+                {selectedIds.length > 0 && (
+                  <span>{selectedIds.length} 条已选中</span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </Tabs>
       </PopoverContent>
     </Popover>
   )

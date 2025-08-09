@@ -776,7 +776,7 @@ export class CasesService {
       const updatedCase = await this.prisma.case.update({
         where: { case_id: caseId },
         data: {
-          status: 'IN_PROGRESS',
+          status: CaseStatus.IN_PROGRESS,
           updated_at: new Date()
         }
       });
@@ -941,6 +941,326 @@ export class CasesService {
       });
     } catch (error) {
       this.logger.error(`Error getting available caseworkers: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  // =================== 案件完成流程方法 ===================
+
+  /**
+   * Caseworker 請求完成案件
+   */
+  async requestCompletion(caseId: number, caseworkerId: number): Promise<CaseActionResponseDto> {
+    try {
+      this.logger.log(`Starting request completion for case ${caseId} by user ${caseworkerId}`, 'REQUEST_COMPLETION');
+
+      // 1. 檢查案件是否存在且指派給當前用戶
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      if (!existingCase) {
+        this.logger.error(`Case ${caseId} not found`, 'REQUEST_COMPLETION');
+        throw new NotFoundException('案件不存在');
+      }
+
+      if (existingCase.assigned_to !== caseworkerId) {
+        this.logger.error(`Case ${caseId} not assigned to user ${caseworkerId}`, 'REQUEST_COMPLETION');
+        throw new ForbiddenException('此案件未指派給您');
+      }
+
+      if (existingCase.status !== CaseStatus.IN_PROGRESS) {
+        this.logger.error(`Case ${caseId} status is ${existingCase.status}, cannot request completion`, 'REQUEST_COMPLETION');
+        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 IN_PROGRESS 狀態的案件可以請求完成`);
+      }
+
+      this.logger.log(`Case ${caseId} validation passed, updating status to PENDING_COMPLETION_REVIEW`, 'REQUEST_COMPLETION');
+
+      // 2. 更新案件狀態
+      const updatedCase = await this.prisma.case.update({
+        where: { case_id: caseId },
+        data: {
+          status: CaseStatus.PENDING_COMPLETION_REVIEW,
+          updated_at: new Date()
+        }
+      });
+
+      this.logger.log(`Case ${caseId} status updated to PENDING_COMPLETION_REVIEW`, 'REQUEST_COMPLETION');
+
+      // 3. 記錄操作日誌
+      await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: caseworkerId,
+          action: '請求完成',
+          details: 'Caseworker 請求完成案件，等待 Chair 審批'
+        }
+      });
+
+      this.logger.log(`Case log created for completion request for case ${caseId}`, 'REQUEST_COMPLETION');
+
+      // 4. 發送通知給所有 Chair 使用增強的通知系統
+      try {
+        this.logger.log(`🔔 [CasesService] Sending completion request notifications for case ${caseId}`, 'REQUEST_COMPLETION');
+        await this.notificationsService.createCompletionRequestNotification(caseId, caseworkerId);
+        this.logger.log(`🔔 [CasesService] Completion request notifications sent successfully for case ${caseId}`, 'REQUEST_COMPLETION');
+      } catch (error) {
+        this.logger.error(`🔔 [CasesService] Failed to send completion request notifications: ${error.message}`, 'REQUEST_COMPLETION');
+      }
+
+      this.logger.log(`Case ${caseId} completion request completed successfully`, 'REQUEST_COMPLETION');
+
+      return {
+        success: true,
+        message: '請求完成成功，等待 Chair 審批',
+        caseId,
+        newStatus: 'PENDING_COMPLETION_REVIEW'
+      };
+    } catch (error) {
+      this.logger.error(`Error requesting completion for case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Chair 批准完成案件
+   */
+  async approveCompletion(caseId: number, chairId: number): Promise<CaseActionResponseDto> {
+    try {
+      this.logger.log(`Starting approval for case ${caseId} by chair ${chairId}`, 'APPROVE_COMPLETION');
+
+      // 1. 檢查案件是否存在
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      if (!existingCase) {
+        this.logger.error(`Case ${caseId} not found`, 'APPROVE_COMPLETION');
+        throw new NotFoundException('案件不存在');
+      }
+
+      if (existingCase.status !== CaseStatus.PENDING_COMPLETION_REVIEW) {
+        this.logger.error(`Case ${caseId} status is ${existingCase.status}, cannot approve`, 'APPROVE_COMPLETION');
+        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 PENDING_COMPLETION_REVIEW 狀態的案件可以批准`);
+      }
+
+      this.logger.log(`Case ${caseId} validation passed, updating status to COMPLETED`, 'APPROVE_COMPLETION');
+
+      // 2. 更新案件狀態並記錄完成時間
+      const updatedCase = await this.prisma.case.update({
+        where: { case_id: caseId },
+        data: {
+          status: CaseStatus.COMPLETED,
+          updated_at: new Date(),
+          // Note: We would need to add completed_at field to the schema to record completion time
+          metadata: {
+            ...existingCase.metadata as any,
+            completed_at: new Date().toISOString(),
+            completed_by: chairId
+          }
+        }
+      });
+
+      this.logger.log(`Case ${caseId} status updated to COMPLETED with completion timestamp`, 'APPROVE_COMPLETION');
+
+      // 3. 記錄操作日誌
+      await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: chairId,
+          action: '批准完成',
+          details: 'Chair 批准了案件完成請求，案件狀態變更為 COMPLETED'
+        }
+      });
+
+      this.logger.log(`Case log created for approval of case ${caseId}`, 'APPROVE_COMPLETION');
+
+      // 4. 發送通知給 Caseworker 和相關人員使用增強的通知系統
+      try {
+        this.logger.log(`🔔 [CasesService] Sending completion approval notifications for case ${caseId}`, 'APPROVE_COMPLETION');
+        await this.notificationsService.createCompletionApprovalNotification(caseId, chairId, true);
+        this.logger.log(`🔔 [CasesService] Completion approval notifications sent successfully for case ${caseId}`, 'APPROVE_COMPLETION');
+      } catch (error) {
+        this.logger.error(`🔔 [CasesService] Failed to send approval notification: ${error.message}`, 'APPROVE_COMPLETION');
+      }
+
+      this.logger.log(`Case ${caseId} approval completed successfully`, 'APPROVE_COMPLETION');
+
+      return {
+        success: true,
+        message: '案件批准完成',
+        caseId,
+        newStatus: 'COMPLETED'
+      };
+    } catch (error) {
+      this.logger.error(`Error approving completion for case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Chair 拒絕完成案件
+   */
+  async rejectCompletion(caseId: number, chairId: number): Promise<CaseActionResponseDto> {
+    try {
+      this.logger.log(`Starting rejection for case ${caseId} by chair ${chairId}`, 'REJECT_COMPLETION');
+
+      // 1. 檢查案件是否存在
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId },
+        include: {
+          creator: { select: { user_id: true, username: true } },
+          assignee: { select: { user_id: true, username: true } }
+        }
+      });
+
+      if (!existingCase) {
+        this.logger.error(`Case ${caseId} not found`, 'REJECT_COMPLETION');
+        throw new NotFoundException('案件不存在');
+      }
+
+      if (existingCase.status !== CaseStatus.PENDING_COMPLETION_REVIEW) {
+        this.logger.error(`Case ${caseId} status is ${existingCase.status}, cannot reject`, 'REJECT_COMPLETION');
+        throw new BadRequestException(`案件狀態為 ${existingCase.status}，只有 PENDING_COMPLETION_REVIEW 狀態的案件可以拒絕`);
+      }
+
+      this.logger.log(`Case ${caseId} validation passed, updating status back to IN_PROGRESS`, 'REJECT_COMPLETION');
+
+      // 2. 更新案件狀態回到 IN_PROGRESS
+      const updatedCase = await this.prisma.case.update({
+        where: { case_id: caseId },
+        data: {
+          status: CaseStatus.IN_PROGRESS,
+          updated_at: new Date()
+        }
+      });
+
+      this.logger.log(`Case ${caseId} status reverted to IN_PROGRESS`, 'REJECT_COMPLETION');
+
+      // 3. 記錄操作日誌
+      await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: chairId,
+          action: '拒絕完成',
+          details: 'Chair 拒絕了案件完成請求，案件狀態回到 IN_PROGRESS，需要 Caseworker 繼續處理'
+        }
+      });
+
+      this.logger.log(`Case log created for rejection of case ${caseId}`, 'REJECT_COMPLETION');
+
+      // 4. 發送通知給 Caseworker 和相關人員使用增強的通知系統
+      try {
+        this.logger.log(`🔔 [CasesService] Sending completion rejection notifications for case ${caseId}`, 'REJECT_COMPLETION');
+        await this.notificationsService.createCompletionApprovalNotification(caseId, chairId, false);
+        this.logger.log(`🔔 [CasesService] Completion rejection notifications sent successfully for case ${caseId}`, 'REJECT_COMPLETION');
+      } catch (error) {
+        this.logger.error(`🔔 [CasesService] Failed to send rejection notification: ${error.message}`, 'REJECT_COMPLETION');
+      }
+
+      this.logger.log(`Case ${caseId} rejection completed successfully`, 'REJECT_COMPLETION');
+
+      return {
+        success: true,
+        message: '案件完成請求已拒絕，案件狀態回到進行中',
+        caseId,
+        newStatus: 'IN_PROGRESS'
+      };
+    } catch (error) {
+      this.logger.error(`Error rejecting completion for case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  // =================== 案件日志方法 ===================
+
+  /**
+   * 添加案件日志
+   */
+  async addCaseLog(caseId: number, userId: number, logEntry: string) {
+    try {
+      this.logger.log(`Adding manual log to case ${caseId} by user ${userId}`, 'ADD_CASE_LOG');
+
+      // 1. 檢查案件是否存在
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId }
+      });
+
+      if (!existingCase) {
+        this.logger.error(`Case ${caseId} not found`, 'ADD_CASE_LOG');
+        throw new NotFoundException('案件不存在');
+      }
+
+      this.logger.log(`Case ${caseId} found, creating log entry`, 'ADD_CASE_LOG');
+
+      // 2. 創建日志記錄
+      const newLog = await this.prisma.caseLog.create({
+        data: {
+          case_id: caseId,
+          user_id: userId,
+          action: '手動備注',
+          details: logEntry
+        }
+      });
+
+      this.logger.log(`Log entry created with ID ${newLog.log_id} for case ${caseId}`, 'ADD_CASE_LOG');
+
+      return {
+        log_id: newLog.log_id,
+        message: '日志添加成功'
+      };
+    } catch (error) {
+      this.logger.error(`Error adding log to case ${caseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * 獲取案件日志列表
+   */
+  async getCaseLogs(caseId: number) {
+    try {
+      this.logger.log(`Fetching logs for case ${caseId}`, 'GET_CASE_LOGS');
+
+      // 1. 檢查案件是否存在
+      const existingCase = await this.prisma.case.findUnique({
+        where: { case_id: caseId }
+      });
+
+      if (!existingCase) {
+        this.logger.error(`Case ${caseId} not found`, 'GET_CASE_LOGS');
+        throw new NotFoundException('案件不存在');
+      }
+
+      // 2. 獲取所有日志，按創建時間降序排列
+      const logs = await this.prisma.caseLog.findMany({
+        where: { case_id: caseId },
+        include: {
+          user: {
+            select: {
+              user_id: true,
+              username: true
+            }
+          }
+        },
+        orderBy: {
+          created_at: 'desc'
+        }
+      });
+
+      this.logger.log(`Found ${logs.length} logs for case ${caseId}`, 'GET_CASE_LOGS');
+
+      return logs;
+    } catch (error) {
+      this.logger.error(`Error getting logs for case ${caseId}: ${error.message}`, error.stack);
       throw error;
     }
   }

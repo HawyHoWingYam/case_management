@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { NotificationType, Notification } from '@prisma/client';
+import { NotificationType, Notification, Role } from '@prisma/client';
 
 export interface CreateNotificationDto {
   type: NotificationType;
@@ -238,7 +238,7 @@ export class NotificationsService {
     senderId?: number,
     customMessage?: string,
   ): Promise<void> {
-    this.logger.log(`Creating case notification: type=${type}, case=${caseId}, recipient=${recipientId}`, 'CREATE_CASE_NOTIFICATION');
+    this.logger.log(`🔔 [NotificationService] Creating case notification: type=${type}, case=${caseId}, recipient=${recipientId}`, 'CREATE_CASE_NOTIFICATION');
     
     const caseData = await this.prisma.case.findUnique({
       where: { case_id: caseId },
@@ -249,9 +249,11 @@ export class NotificationsService {
     });
 
     if (!caseData) {
-      this.logger.error(`Case ${caseId} not found for notification`, 'CREATE_CASE_NOTIFICATION');
+      this.logger.error(`🔔 [NotificationService] Case ${caseId} not found for notification`, 'CREATE_CASE_NOTIFICATION');
       return;
     }
+
+    this.logger.debug(`🔔 [NotificationService] Case data loaded: ${JSON.stringify({ title: caseData.title, status: caseData.status, priority: caseData.priority })}`, 'CREATE_CASE_NOTIFICATION');
 
     let title = '';
     let message = customMessage || '';
@@ -286,6 +288,8 @@ export class NotificationsService {
         message = message || `案件 "${caseData.title}" 有更新`;
     }
 
+    this.logger.log(`🔔 [NotificationService] Notification template: ${title} - ${message}`, 'CREATE_CASE_NOTIFICATION');
+
     await this.create({
       type,
       title,
@@ -299,5 +303,207 @@ export class NotificationsService {
         case_priority: caseData.priority,
       },
     });
+
+    this.logger.log(`🔔 [NotificationService] Case notification created successfully`, 'CREATE_CASE_NOTIFICATION');
+  }
+
+  // Stage 3 Goal 3: Enhanced notification methods for case completion workflow
+  async createCompletionRequestNotification(caseId: number, caseworkerId: number): Promise<void> {
+    this.logger.log(`🔔 [NotificationService] Creating completion request notification for case ${caseId} from caseworker ${caseworkerId}`, 'CREATE_COMPLETION_REQUEST');
+    
+    // Get all Chair users
+    const chairUsers = await this.prisma.user.findMany({
+      where: { role: Role.ADMIN, is_active: true },
+      select: { user_id: true, username: true },
+    });
+
+    this.logger.debug(`🔔 [NotificationService] Found ${chairUsers.length} Chair users to notify`, 'CREATE_COMPLETION_REQUEST');
+
+    const caseData = await this.prisma.case.findUnique({
+      where: { case_id: caseId },
+      include: {
+        assignee: { select: { username: true } },
+      },
+    });
+
+    if (!caseData) {
+      this.logger.error(`🔔 [NotificationService] Case ${caseId} not found for completion request notification`, 'CREATE_COMPLETION_REQUEST');
+      return;
+    }
+
+    // Create notifications for all Chair users
+    for (const chair of chairUsers) {
+      this.logger.debug(`🔔 [NotificationService] Creating completion request notification for Chair ${chair.user_id} (${chair.username})`, 'CREATE_COMPLETION_REQUEST');
+      
+      await this.create({
+        type: NotificationType.CASE_STATUS_CHANGED,
+        title: '案件完成审批请求',
+        message: `案件 "${caseData.title}" 已由 ${caseData.assignee?.username || 'Caseworker'} 请求完成，等待您的审批`,
+        recipient_id: chair.user_id,
+        sender_id: caseworkerId,
+        case_id: caseId,
+        metadata: {
+          case_title: caseData.title,
+          case_status: caseData.status,
+          action_type: 'COMPLETION_REQUEST',
+          caseworker_name: caseData.assignee?.username,
+          notification_link: `/cases/${caseId}`,
+        },
+      });
+    }
+
+    this.logger.log(`🔔 [NotificationService] Completion request notifications sent to ${chairUsers.length} Chair users`, 'CREATE_COMPLETION_REQUEST');
+  }
+
+  async createCompletionApprovalNotification(caseId: number, chairId: number, approved: boolean): Promise<void> {
+    const action = approved ? 'approved' : 'rejected';
+    this.logger.log(`🔔 [NotificationService] Creating completion ${action} notification for case ${caseId} from chair ${chairId}`, 'CREATE_COMPLETION_APPROVAL');
+    
+    const caseData = await this.prisma.case.findUnique({
+      where: { case_id: caseId },
+      include: {
+        assignee: { select: { user_id: true, username: true } },
+        creator: { select: { user_id: true, username: true } },
+      },
+    });
+
+    if (!caseData) {
+      this.logger.error(`🔔 [NotificationService] Case ${caseId} not found for completion ${action} notification`, 'CREATE_COMPLETION_APPROVAL');
+      return;
+    }
+
+    const chairUser = await this.prisma.user.findUnique({
+      where: { user_id: chairId },
+      select: { username: true },
+    });
+
+    const title = approved ? '案件已批准完成' : '案件完成被拒绝';
+    const message = approved 
+      ? `您的案件 "${caseData.title}" 已由 ${chairUser?.username || 'Chair'} 批准完成`
+      : `您的案件 "${caseData.title}" 的完成请求已被 ${chairUser?.username || 'Chair'} 拒绝`;
+
+    // Notify the assigned caseworker
+    if (caseData.assignee) {
+      this.logger.debug(`🔔 [NotificationService] Notifying caseworker ${caseData.assignee.user_id} about completion ${action}`, 'CREATE_COMPLETION_APPROVAL');
+      
+      await this.create({
+        type: approved ? NotificationType.CASE_STATUS_CHANGED : NotificationType.CASE_REJECTED,
+        title,
+        message,
+        recipient_id: caseData.assignee.user_id,
+        sender_id: chairId,
+        case_id: caseId,
+        metadata: {
+          case_title: caseData.title,
+          case_status: caseData.status,
+          action_type: approved ? 'COMPLETION_APPROVED' : 'COMPLETION_REJECTED',
+          chair_name: chairUser?.username,
+          notification_link: `/cases/${caseId}`,
+        },
+      });
+    }
+
+    // Also notify the case creator if different from assignee
+    if (caseData.creator && caseData.creator.user_id !== caseData.assignee?.user_id) {
+      this.logger.debug(`🔔 [NotificationService] Notifying case creator ${caseData.creator.user_id} about completion ${action}`, 'CREATE_COMPLETION_APPROVAL');
+      
+      await this.create({
+        type: approved ? NotificationType.CASE_STATUS_CHANGED : NotificationType.CASE_REJECTED,
+        title,
+        message: approved 
+          ? `案件 "${caseData.title}" 已由 ${chairUser?.username || 'Chair'} 批准完成`
+          : `案件 "${caseData.title}" 的完成请求已被 ${chairUser?.username || 'Chair'} 拒绝`,
+        recipient_id: caseData.creator.user_id,
+        sender_id: chairId,
+        case_id: caseId,
+        metadata: {
+          case_title: caseData.title,
+          case_status: caseData.status,
+          action_type: approved ? 'COMPLETION_APPROVED' : 'COMPLETION_REJECTED',
+          chair_name: chairUser?.username,
+          notification_link: `/cases/${caseId}`,
+        },
+      });
+    }
+
+    this.logger.log(`🔔 [NotificationService] Completion ${action} notifications sent successfully`, 'CREATE_COMPLETION_APPROVAL');
+  }
+
+  // Enhanced notification template system
+  getNotificationTemplate(type: NotificationType, context: any): { title: string; message: string } {
+    this.logger.debug(`🔔 [NotificationService] Getting template for type ${type} with context ${JSON.stringify(context)}`, 'GET_TEMPLATE');
+    
+    const templates = {
+      [NotificationType.CASE_ASSIGNED]: {
+        title: '案件已分配',
+        message: `案件 "${context.case_title}" 已分配给您`,
+      },
+      [NotificationType.CASE_ACCEPTED]: {
+        title: '案件已接受',
+        message: `您的案件 "${context.case_title}" 已被 ${context.assignee_name} 接受`,
+      },
+      [NotificationType.CASE_REJECTED]: {
+        title: '案件已拒绝',
+        message: `您的案件 "${context.case_title}" 已被拒绝`,
+      },
+      [NotificationType.CASE_STATUS_CHANGED]: {
+        title: '案件状态变更',
+        message: `案件 "${context.case_title}" 的状态已更新为 ${context.new_status}`,
+      },
+      [NotificationType.CASE_PRIORITY_CHANGED]: {
+        title: '案件优先级变更',
+        message: `案件 "${context.case_title}" 的优先级已更新为 ${context.new_priority}`,
+      },
+      [NotificationType.CASE_COMMENT_ADDED]: {
+        title: '新评论',
+        message: `案件 "${context.case_title}" 有新的评论`,
+      },
+      [NotificationType.SYSTEM_ANNOUNCEMENT]: {
+        title: context.title || '系统公告',
+        message: context.message || '系统有重要更新',
+      },
+    };
+
+    const template = templates[type] || {
+      title: '通知',
+      message: context.message || '您有新的通知',
+    };
+
+    this.logger.debug(`🔔 [NotificationService] Template generated: ${JSON.stringify(template)}`, 'GET_TEMPLATE');
+    return template;
+  }
+
+  // Batch notification operations
+  async markMultipleAsRead(notificationIds: number[], userId: number): Promise<{ count: number }> {
+    this.logger.log(`🔔 [NotificationService] Marking ${notificationIds.length} notifications as read for user ${userId}`, 'MARK_MULTIPLE_READ');
+    
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        notification_id: { in: notificationIds },
+        recipient_id: userId,
+        is_read: false,
+      },
+      data: {
+        is_read: true,
+        read_at: new Date(),
+      },
+    });
+
+    this.logger.log(`🔔 [NotificationService] Marked ${result.count} notifications as read`, 'MARK_MULTIPLE_READ');
+    return { count: result.count };
+  }
+
+  async deleteMultiple(notificationIds: number[], userId: number): Promise<{ count: number }> {
+    this.logger.log(`🔔 [NotificationService] Deleting ${notificationIds.length} notifications for user ${userId}`, 'DELETE_MULTIPLE');
+    
+    const result = await this.prisma.notification.deleteMany({
+      where: {
+        notification_id: { in: notificationIds },
+        recipient_id: userId,
+      },
+    });
+
+    this.logger.log(`🔔 [NotificationService] Deleted ${result.count} notifications`, 'DELETE_MULTIPLE');
+    return { count: result.count };
   }
 }

@@ -1,5 +1,5 @@
 // 案件狀態類型
-export type CaseStatus = 'OPEN' | 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED'
+export type CaseStatus = 'OPEN' | 'IN_PROGRESS' | 'PENDING' | 'PENDING_COMPLETION_REVIEW' | 'RESOLVED' | 'COMPLETED' | 'CLOSED'
 
 // 案件優先級類型
 export type CasePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
@@ -83,11 +83,23 @@ export const CASE_STATUS_CONFIG = {
     variant: 'outline' as const,
     description: '等待外部回應或條件滿足'
   },
+  PENDING_COMPLETION_REVIEW: {
+    label: '待审批',
+    color: 'purple',
+    variant: 'secondary' as const,
+    description: '已请求完成，等待Chair审批'
+  },
   RESOLVED: {
     label: '已解決',
     color: 'green',
     variant: 'success' as const,
     description: '問題已解決，等待確認'
+  },
+  COMPLETED: {
+    label: '已完成',
+    color: 'green',
+    variant: 'default' as const,
+    description: '案件已完成并通过审批'
   },
   CLOSED: {
     label: '已關閉',

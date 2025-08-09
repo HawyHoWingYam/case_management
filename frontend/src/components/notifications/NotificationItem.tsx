@@ -42,7 +42,7 @@ interface NotificationItemProps {
   compact?: boolean
 }
 
-// 通知类型图标映射
+// Stage 3 Goal 3: Enhanced notification type icons with completion workflow support
 const notificationIcons = {
   CASE_ASSIGNED: UserPlus,
   CASE_ACCEPTED: CheckCircle,
@@ -53,7 +53,7 @@ const notificationIcons = {
   SYSTEM_ANNOUNCEMENT: Megaphone,
 }
 
-// 通知类型颜色映射
+// Enhanced notification colors with completion workflow support
 const notificationColors = {
   CASE_ASSIGNED: 'text-blue-600 bg-blue-100',
   CASE_ACCEPTED: 'text-green-600 bg-green-100',
@@ -64,7 +64,7 @@ const notificationColors = {
   SYSTEM_ANNOUNCEMENT: 'text-indigo-600 bg-indigo-100',
 }
 
-// 通知类型标签映射
+// Enhanced notification labels with completion workflow support
 const notificationLabels = {
   CASE_ASSIGNED: '案件指派',
   CASE_ACCEPTED: '案件接受',
@@ -73,6 +73,53 @@ const notificationLabels = {
   CASE_PRIORITY_CHANGED: '优先级变更',
   CASE_COMMENT_ADDED: '新评论',
   SYSTEM_ANNOUNCEMENT: '系统公告',
+}
+
+// Stage 3 Goal 3: Function to get enhanced notification styling based on metadata
+const getEnhancedNotificationStyle = (notification: Notification) => {
+  console.log('🔔 [NotificationItem] Getting enhanced style for notification:', {
+    id: notification.notification_id,
+    type: notification.type,
+    metadata: notification.metadata
+  })
+  
+  // Check if this is a completion workflow notification
+  if (notification.metadata?.action_type) {
+    const actionType = notification.metadata.action_type
+    console.log('🔔 [NotificationItem] Enhanced notification detected:', actionType)
+    
+    switch (actionType) {
+      case 'COMPLETION_REQUEST':
+        return {
+          icon: Flag,
+          color: 'text-amber-600 bg-amber-100',
+          label: '完成审批请求',
+          priority: 'high'
+        }
+      case 'COMPLETION_APPROVED':
+        return {
+          icon: CheckCircle,
+          color: 'text-emerald-600 bg-emerald-100',
+          label: '完成已批准',
+          priority: 'high'
+        }
+      case 'COMPLETION_REJECTED':
+        return {
+          icon: XCircle,
+          color: 'text-rose-600 bg-rose-100',
+          label: '完成被拒绝',
+          priority: 'high'
+        }
+    }
+  }
+  
+  // Return default styling
+  return {
+    icon: notificationIcons[notification.type] || FileText,
+    color: notificationColors[notification.type] || 'text-gray-600 bg-gray-100',
+    label: notificationLabels[notification.type] || notification.type,
+    priority: 'normal'
+  }
 }
 
 export function NotificationItem({
@@ -90,13 +137,15 @@ export function NotificationItem({
     id: notification.notification_id,
     type: notification.type,
     isRead: notification.is_read,
-    title: notification.title
+    title: notification.title,
+    metadata: notification.metadata
   })
 
-  // 获取通知图标和颜色
-  const IconComponent = notificationIcons[notification.type] || FileText
-  const iconColorClass = notificationColors[notification.type] || 'text-gray-600 bg-gray-100'
-  const typeLabel = notificationLabels[notification.type] || notification.type
+  // Stage 3 Goal 3: Get enhanced notification styling
+  const enhancedStyle = getEnhancedNotificationStyle(notification)
+  const IconComponent = enhancedStyle.icon
+  const iconColorClass = enhancedStyle.color
+  const typeLabel = enhancedStyle.label
 
   // 格式化时间
   const timeAgo = formatDistanceToNow(new Date(notification.created_at), {
