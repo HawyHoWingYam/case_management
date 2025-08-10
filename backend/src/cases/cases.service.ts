@@ -796,14 +796,66 @@ export class CasesService {
         if (existingCase.created_by !== caseworkerId) {
           await this.notificationsService.createCaseNotification(
             NotificationType.CASE_ACCEPTED,
-            existingCase.created_by,
             caseId,
+            existingCase.created_by,
             caseworkerId,
           );
         }
-        this.logger.log(`Case acceptance notification sent for case ${caseId}`, 'ACCEPT_CASE');
+        this.logger.log(`Case acceptance notification sent to creator for case ${caseId}`, 'ACCEPT_CASE');
       } catch (error) {
-        this.logger.error(`Failed to send acceptance notification: ${error.message}`, 'ACCEPT_CASE');
+        this.logger.error(`Failed to send acceptance notification to creator: ${error.message}`, 'ACCEPT_CASE');
+      }
+
+      // 🔔 發送接受通知給所有管理員和ADMIN
+      try {
+        this.logger.log(`📧 [CaseService] Sending case acceptance notifications to managers and admins for case ${caseId}`, 'ACCEPT_CASE');
+        
+        // 获取所有活跃的管理员用户 (MANAGER 和 ADMIN)
+        const managersAndAdmins = await this.prisma.user.findMany({
+          where: {
+            role: { in: ['MANAGER', 'ADMIN'] },
+            is_active: true
+          },
+          select: {
+            user_id: true,
+            username: true,
+            email: true,
+            role: true,
+          }
+        });
+
+        this.logger.log(`📧 [CaseService] Found ${managersAndAdmins.length} managers/admins to notify about case acceptance`, 'ACCEPT_CASE');
+
+        // 获取案件详细信息用于通知
+        const caseDetails = await this.prisma.case.findUnique({
+          where: { case_id: caseId },
+          select: { title: true }
+        });
+
+        // 向每个管理员发送案件接受通知
+        for (const admin of managersAndAdmins) {
+          // 不要给操作者发通知
+          if (admin.user_id !== caseworkerId) {
+            try {
+              this.logger.log(`📧 [CaseService] Sending case acceptance notification to ${admin.role}: ${admin.username} (${admin.email})`, 'ACCEPT_CASE');
+              
+              await this.notificationsService.createCaseNotification(
+                NotificationType.CASE_ACCEPTED,
+                caseId,
+                admin.user_id,
+                caseworkerId,
+                `案件 "${caseDetails?.title || 'Unknown'}" 已被 ${existingCase.assignee?.username || 'Caseworker'} 接受，现在进入处理状态。`
+              );
+
+              this.logger.log(`📧 [CaseService] ✅ Case acceptance notification sent to ${admin.role} ${admin.username}`, 'ACCEPT_CASE');
+            } catch (adminNotificationError) {
+              this.logger.error(`📧 [CaseService] ❌ Failed to send acceptance notification to ${admin.role} ${admin.username}: ${adminNotificationError.message}`, 'ACCEPT_CASE');
+            }
+          }
+        }
+        this.logger.log(`📧 [CaseService] Completed sending case acceptance notifications for case ${caseId}`, 'ACCEPT_CASE');
+      } catch (error) {
+        this.logger.error(`📧 [CaseService] ❌ Failed to send acceptance notifications to managers/admins: ${error.message}`, 'ACCEPT_CASE');
       }
 
       this.logger.log(`Case ${caseId} accepted by user ${caseworkerId}`, 'ACCEPT_CASE');
@@ -871,14 +923,66 @@ export class CasesService {
         if (existingCase.created_by !== caseworkerId) {
           await this.notificationsService.createCaseNotification(
             NotificationType.CASE_REJECTED,
-            existingCase.created_by,
             caseId,
+            existingCase.created_by,
             caseworkerId,
           );
         }
-        this.logger.log(`Case rejection notification sent for case ${caseId}`, 'REJECT_CASE');
+        this.logger.log(`Case rejection notification sent to creator for case ${caseId}`, 'REJECT_CASE');
       } catch (error) {
-        this.logger.error(`Failed to send rejection notification: ${error.message}`, 'REJECT_CASE');
+        this.logger.error(`Failed to send rejection notification to creator: ${error.message}`, 'REJECT_CASE');
+      }
+
+      // 🔔 發送拒絕通知給所有管理員和ADMIN
+      try {
+        this.logger.log(`📧 [CaseService] Sending case rejection notifications to managers and admins for case ${caseId}`, 'REJECT_CASE');
+        
+        // 获取所有活跃的管理员用户 (MANAGER 和 ADMIN)
+        const managersAndAdmins = await this.prisma.user.findMany({
+          where: {
+            role: { in: ['MANAGER', 'ADMIN'] },
+            is_active: true
+          },
+          select: {
+            user_id: true,
+            username: true,
+            email: true,
+            role: true,
+          }
+        });
+
+        this.logger.log(`📧 [CaseService] Found ${managersAndAdmins.length} managers/admins to notify about case rejection`, 'REJECT_CASE');
+
+        // 获取案件详细信息用于通知
+        const caseDetails = await this.prisma.case.findUnique({
+          where: { case_id: caseId },
+          select: { title: true }
+        });
+
+        // 向每个管理员发送案件拒绝通知
+        for (const admin of managersAndAdmins) {
+          // 不要给操作者发通知
+          if (admin.user_id !== caseworkerId) {
+            try {
+              this.logger.log(`📧 [CaseService] Sending case rejection notification to ${admin.role}: ${admin.username} (${admin.email})`, 'REJECT_CASE');
+              
+              await this.notificationsService.createCaseNotification(
+                NotificationType.CASE_REJECTED,
+                caseId,
+                admin.user_id,
+                caseworkerId,
+                `案件 "${caseDetails?.title || 'Unknown'}" 已被 Caseworker 拒绝，案件状态已回到开放状态，需要重新指派。`
+              );
+
+              this.logger.log(`📧 [CaseService] ✅ Case rejection notification sent to ${admin.role} ${admin.username}`, 'REJECT_CASE');
+            } catch (adminNotificationError) {
+              this.logger.error(`📧 [CaseService] ❌ Failed to send rejection notification to ${admin.role} ${admin.username}: ${adminNotificationError.message}`, 'REJECT_CASE');
+            }
+          }
+        }
+        this.logger.log(`📧 [CaseService] Completed sending case rejection notifications for case ${caseId}`, 'REJECT_CASE');
+      } catch (error) {
+        this.logger.error(`📧 [CaseService] ❌ Failed to send rejection notifications to managers/admins: ${error.message}`, 'REJECT_CASE');
       }
 
       this.logger.log(`Case ${caseId} rejected by user ${caseworkerId}`, 'REJECT_CASE');
@@ -1212,6 +1316,15 @@ export class CasesService {
       });
 
       this.logger.log(`Log entry created with ID ${newLog.log_id} for case ${caseId}`, 'ADD_CASE_LOG');
+
+      // 🔔 发送备注添加通知
+      try {
+        this.logger.log(`📧 [CasesService] Starting to send comment notification for case ${caseId}`, 'ADD_CASE_LOG');
+        await this.sendCommentNotification(caseId, userId, logEntry);
+        this.logger.log(`📧 [CasesService] Comment notification sent successfully for case ${caseId}`, 'ADD_CASE_LOG');
+      } catch (notificationError) {
+        this.logger.error(`📧 [CasesService] Failed to send comment notification: ${notificationError.message}`, 'ADD_CASE_LOG');
+      }
 
       return {
         log_id: newLog.log_id,
@@ -1592,6 +1705,99 @@ export class CasesService {
     return this.prisma.user.count({
       where: { is_active: true },
     });
+  }
+
+  /**
+   * 发送备注添加通知
+   */
+  private async sendCommentNotification(caseId: number, commenterId: number, commentContent: string) {
+    try {
+      this.logger.log(`📧 [CasesService] Processing comment notification for case ${caseId} from user ${commenterId}`, 'SEND_COMMENT_NOTIFICATION');
+
+      // 获取案件信息和添加备注的用户信息
+      const [caseData, commenter] = await Promise.all([
+        this.prisma.case.findUnique({
+          where: { case_id: caseId },
+          include: {
+            creator: { select: { user_id: true, username: true, email: true } },
+            assignee: { select: { user_id: true, username: true, email: true } }
+          }
+        }),
+        this.prisma.user.findUnique({
+          where: { user_id: commenterId },
+          select: { user_id: true, username: true, email: true, role: true }
+        })
+      ]);
+
+      if (!caseData || !commenter) {
+        this.logger.error(`📧 [CasesService] Case or commenter not found for comment notification`, 'SEND_COMMENT_NOTIFICATION');
+        return;
+      }
+
+      this.logger.log(`📧 [CasesService] Case data: ${caseData.title}, Commenter: ${commenter.username} (${commenter.role})`, 'SEND_COMMENT_NOTIFICATION');
+
+      // 根据添加备注的用户角色决定通知策略
+      if (commenter.role === 'MANAGER' || commenter.role === 'ADMIN') {
+        // Manager/Admin 添加备注：通知被指派的用户
+        if (caseData.assigned_to && caseData.assignee) {
+          // 不要给自己发通知
+          if (caseData.assigned_to !== commenterId) {
+            this.logger.log(`📧 [CasesService] Manager/Admin added comment, notifying assigned user: ${caseData.assignee.username}`, 'SEND_COMMENT_NOTIFICATION');
+            
+            await this.notificationsService.createCaseNotification(
+              NotificationType.CASE_COMMENT_ADDED,
+              caseId,
+              caseData.assigned_to,
+              commenterId,
+              `管理员 ${commenter.username} 在案件 "${caseData.title}" 中添加了新备注：${commentContent.substring(0, 100)}${commentContent.length > 100 ? '...' : ''}`
+            );
+          }
+        } else {
+          this.logger.log(`📧 [CasesService] Case has no assignee, skipping notification`, 'SEND_COMMENT_NOTIFICATION');
+        }
+      } else {
+        // 用户添加备注：通知所有 Manager 和 Admin
+        this.logger.log(`📧 [CasesService] User added comment, notifying all managers and admins`, 'SEND_COMMENT_NOTIFICATION');
+        
+        const managersAndAdmins = await this.prisma.user.findMany({
+          where: {
+            role: { in: ['MANAGER', 'ADMIN'] },
+            is_active: true
+          },
+          select: {
+            user_id: true,
+            username: true,
+            email: true,
+            role: true,
+          }
+        });
+
+        this.logger.log(`📧 [CasesService] Found ${managersAndAdmins.length} managers/admins to notify about comment`, 'SEND_COMMENT_NOTIFICATION');
+
+        for (const admin of managersAndAdmins) {
+          try {
+            this.logger.log(`📧 [CasesService] Sending comment notification to ${admin.role}: ${admin.username}`, 'SEND_COMMENT_NOTIFICATION');
+            
+            await this.notificationsService.createCaseNotification(
+              NotificationType.CASE_COMMENT_ADDED,
+              caseId,
+              admin.user_id,
+              commenterId,
+              `${commenter.username} 在案件 "${caseData.title}" 中添加了新备注：${commentContent.substring(0, 100)}${commentContent.length > 100 ? '...' : ''}`
+            );
+
+            this.logger.log(`📧 [CasesService] ✅ Comment notification sent to ${admin.role} ${admin.username}`, 'SEND_COMMENT_NOTIFICATION');
+          } catch (adminNotificationError) {
+            this.logger.error(`📧 [CasesService] ❌ Failed to send comment notification to ${admin.role} ${admin.username}: ${adminNotificationError.message}`, 'SEND_COMMENT_NOTIFICATION');
+          }
+        }
+      }
+
+      this.logger.log(`📧 [CasesService] Comment notification process completed for case ${caseId}`, 'SEND_COMMENT_NOTIFICATION');
+    } catch (error) {
+      this.logger.error(`📧 [CasesService] Error sending comment notification: ${error.message}`, 'SEND_COMMENT_NOTIFICATION');
+      throw error;
+    }
   }
 
   /**

@@ -81,9 +81,10 @@ export default function LoginPage() {
 
   // 测试账户信息
   const testAccounts = [
-    { role: '管理员', email: 'admin@example.com', password: 'admin123', variant: 'destructive' as const },
-    { role: '经理', email: 'manager@example.com', password: 'manager123', variant: 'default' as const },
-    { role: '用户', email: 'user1@example.com', password: 'user123', variant: 'secondary' as const },
+    { role: '管理员', email: 'tomasinamackeria28233@gmail.com', password: 'admin123', variant: 'destructive' as const },
+    { role: '经理', email: 'karasho199562@gmail.com', password: 'manager123', variant: 'default' as const },
+    { role: '用户1', email: 'fujg85282@gmail.com', password: 'user123', variant: 'secondary' as const },
+    { role: '用户2', email: 'sjhu21196@gmail.com', password: 'user123', variant: 'outline' as const },
   ]
 
   const fillTestAccount = (email: string, password: string) => {

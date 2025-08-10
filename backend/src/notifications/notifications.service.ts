@@ -311,13 +311,19 @@ export class NotificationsService {
   async createCompletionRequestNotification(caseId: number, caseworkerId: number): Promise<void> {
     this.logger.log(`🔔 [NotificationService] Creating completion request notification for case ${caseId} from caseworker ${caseworkerId}`, 'CREATE_COMPLETION_REQUEST');
     
-    // Get all Chair users
+    // Get all Chair users (ADMIN and MANAGER)
     const chairUsers = await this.prisma.user.findMany({
-      where: { role: Role.ADMIN, is_active: true },
-      select: { user_id: true, username: true },
+      where: { 
+        role: { in: [Role.ADMIN, Role.MANAGER] }, 
+        is_active: true 
+      },
+      select: { user_id: true, username: true, role: true },
     });
 
-    this.logger.debug(`🔔 [NotificationService] Found ${chairUsers.length} Chair users to notify`, 'CREATE_COMPLETION_REQUEST');
+    this.logger.debug(`🔔 [NotificationService] Found ${chairUsers.length} Chair users (ADMIN/MANAGER) to notify about completion request`, 'CREATE_COMPLETION_REQUEST');
+    chairUsers.forEach(chair => {
+      this.logger.debug(`🔔 [NotificationService] Chair user: ${chair.username} (${chair.role})`, 'CREATE_COMPLETION_REQUEST');
+    });
 
     const caseData = await this.prisma.case.findUnique({
       where: { case_id: caseId },
@@ -374,8 +380,10 @@ export class NotificationsService {
 
     const chairUser = await this.prisma.user.findUnique({
       where: { user_id: chairId },
-      select: { username: true },
+      select: { username: true, role: true },
     });
+
+    this.logger.debug(`🔔 [NotificationService] Chair user info: ${chairUser?.username} (${chairUser?.role})`, 'CREATE_COMPLETION_APPROVAL');
 
     const title = approved ? '案件已批准完成' : '案件完成被拒绝';
     const message = approved 
@@ -424,6 +432,52 @@ export class NotificationsService {
           notification_link: `/cases/${caseId}`,
         },
       });
+    }
+
+    // 特殊需求：如果是Manager批准，还需要通知所有Admin用户
+    if (approved && chairUser?.role === 'MANAGER') {
+      this.logger.debug(`🔔 [NotificationService] Manager approved case completion, notifying all Admins`, 'CREATE_COMPLETION_APPROVAL');
+      
+      const adminUsers = await this.prisma.user.findMany({
+        where: { 
+          role: Role.ADMIN, 
+          is_active: true 
+        },
+        select: { user_id: true, username: true },
+      });
+
+      this.logger.debug(`🔔 [NotificationService] Found ${adminUsers.length} Admin users to notify about Manager approval`, 'CREATE_COMPLETION_APPROVAL');
+
+      for (const admin of adminUsers) {
+        // 不要给操作者自己发通知
+        if (admin.user_id !== chairId) {
+          try {
+            this.logger.debug(`🔔 [NotificationService] Sending completion approval notification to Admin: ${admin.username}`, 'CREATE_COMPLETION_APPROVAL');
+            
+            await this.create({
+              type: NotificationType.CASE_STATUS_CHANGED,
+              title: '案件已批准完成（Manager操作）',
+              message: `案件 "${caseData.title}" 已由 Manager ${chairUser.username} 批准完成`,
+              recipient_id: admin.user_id,
+              sender_id: chairId,
+              case_id: caseId,
+              metadata: {
+                case_title: caseData.title,
+                case_status: caseData.status,
+                action_type: 'MANAGER_COMPLETION_APPROVED',
+                chair_name: chairUser.username,
+                notification_link: `/cases/${caseId}`,
+              },
+            });
+
+            this.logger.debug(`🔔 [NotificationService] ✅ Completion approval notification sent to Admin: ${admin.username}`, 'CREATE_COMPLETION_APPROVAL');
+          } catch (adminNotificationError) {
+            this.logger.error(`🔔 [NotificationService] ❌ Failed to send completion approval notification to Admin ${admin.username}: ${adminNotificationError.message}`, 'CREATE_COMPLETION_APPROVAL');
+          }
+        }
+      }
+    } else if (approved) {
+      this.logger.debug(`🔔 [NotificationService] Chair is Admin or case not approved, skipping Admin notifications`, 'CREATE_COMPLETION_APPROVAL');
     }
 
     this.logger.log(`🔔 [NotificationService] Completion ${action} notifications sent successfully`, 'CREATE_COMPLETION_APPROVAL');
