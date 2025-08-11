@@ -103,7 +103,12 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
   const canAddLog = () => {
     if (!user) return false;
     
-    // ADMIN 和 MANAGER 几乎在所有情况下都可以添加备注
+    // 检查案件是否已完成 - 所有人都不能对已完成的案件添加备注
+    if (['COMPLETED', 'CLOSED', 'RESOLVED'].includes(caseData.status)) {
+      return false;
+    }
+    
+    // ADMIN 和 MANAGER 在其他所有情况下都可以添加备注
     if (hasRole(['ADMIN', 'MANAGER'])) {
       return true;
     }
@@ -127,9 +132,6 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
         case 'PENDING_COMPLETION_REVIEW':
           return true;
         case 'OPEN':
-        case 'COMPLETED':
-        case 'CLOSED':
-        case 'RESOLVED':
           return false;
         default:
           return false;
@@ -143,8 +145,13 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
   const getCannotAddLogReason = () => {
     if (!user) return '请先登录';
     
+    // 检查案件是否已完成
+    if (['COMPLETED', 'CLOSED', 'RESOLVED'].includes(caseData.status)) {
+      return '案件已完成，不能添加备注';
+    }
+    
     if (hasRole(['ADMIN', 'MANAGER'])) {
-      return null; // 管理员总是可以添加
+      return null; // 管理员在非完成状态下总是可以添加
     }
     
     if (hasRole(['USER'])) {
@@ -159,10 +166,6 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
       switch (caseData.status) {
         case 'OPEN':
           return '案件状态异常，请联系管理员';
-        case 'COMPLETED':
-        case 'CLOSED':
-        case 'RESOLVED':
-          return '案件已完成，不能添加备注';
         default:
           return `案件状态 ${caseData.status} 不允许添加备注`;
       }

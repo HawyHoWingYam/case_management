@@ -748,15 +748,50 @@ export class CasesService {
 
       // 🔔 發送指派通知
       try {
+        // 1. 发送通知给被指派的用户
         await this.notificationsService.createCaseNotification(
           NotificationType.CASE_ASSIGNED,
-          assignedCaseworkerId,
           caseId,
+          assignedCaseworkerId,
           assigner.user_id,
         );
-        this.logger.log(`Assignment notification sent for case ${caseId}`, 'ASSIGN_CASE');
+        this.logger.log(`Assignment notification sent to assigned user for case ${caseId}`, 'ASSIGN_CASE');
+
+        // 2. 发送通知给所有管理员和经理
+        const managersAndAdmins = await this.prisma.user.findMany({
+          where: {
+            role: { in: ['MANAGER', 'ADMIN'] },
+            is_active: true
+          },
+          select: {
+            user_id: true,
+            username: true,
+            email: true,
+            role: true,
+          }
+        });
+
+        this.logger.log(`Found ${managersAndAdmins.length} managers/admins to notify about case assignment`, 'ASSIGN_CASE');
+
+        for (const admin of managersAndAdmins) {
+          // 不要给操作者发通知
+          if (admin.user_id !== assigner.user_id) {
+            try {
+              await this.notificationsService.createCaseNotification(
+                NotificationType.CASE_ASSIGNED,
+                caseId,
+                admin.user_id,
+                assigner.user_id,
+                `案件 "${existingCase.title}" 已被指派给 ${caseworker.username}`
+              );
+              this.logger.log(`✅ Assignment notification sent to ${admin.role} ${admin.username}`, 'ASSIGN_CASE');
+            } catch (adminNotificationError) {
+              this.logger.error(`❌ Failed to send assignment notification to ${admin.role} ${admin.username}: ${adminNotificationError.message}`, 'ASSIGN_CASE');
+            }
+          }
+        }
       } catch (error) {
-        this.logger.error(`Failed to send assignment notification: ${error.message}`, 'ASSIGN_CASE');
+        this.logger.error(`Failed to send assignment notifications: ${error.message}`, 'ASSIGN_CASE');
       }
 
       this.logger.log(`Case ${caseId} assigned to user ${assignedCaseworkerId} by ${assigner.user_id}`, 'ASSIGN_CASE');
@@ -1507,13 +1542,14 @@ export class CasesService {
       default:
         // 根据用户角色限制可见性
         if (userRole === 'USER') {
-          // Case worker 只能看到自己被指派的案件和未被指派的案件
+          // Case worker 只能看到：1. 指派给自己的案件 2. 未被指派的案件
+          // 已指派给其他人的案件不可见
           whereCondition.OR = [
             { assigned_to: userId },  // 指派给自己的案件
             { assigned_to: null },    // 未被指派的案件
           ];
         }
-        // ADMIN 和 MANAGER 可以查看所有案件
+        // ADMIN 和 MANAGER 可以查看所有案件（包括指派给任何人的案件）
         break;
     }
 
@@ -1619,6 +1655,7 @@ export class CasesService {
   private getBaseWhereForRole(userId: number, userRole: string): Prisma.CaseWhereInput {
     if (userRole === 'USER') {
       // Case worker 只能看到：1. 自己被指派的案件 2. 未被指派的案件
+      // 但已指派给其他人的案件不能看到
       return {
         OR: [
           { assigned_to: userId }, // 指派给自己的案件
@@ -1984,7 +2021,15 @@ export class CasesService {
     const caseStatus = caseData.status;
     const assignedTo = caseData.assigned_to;
     
-    // ADMIN 和 MANAGER 几乎在所有情况下都可以添加备注
+    // 检查案件是否已完成 - 所有人都不能对已完成的案件添加备注
+    if (caseStatus === 'COMPLETED' || caseStatus === 'CLOSED' || caseStatus === 'RESOLVED') {
+      return { 
+        allowed: false, 
+        reason: '案件已完成，不能添加备注' 
+      };
+    }
+    
+    // ADMIN 和 MANAGER 在其他所有情况下都可以添加备注
     if (userRole === 'ADMIN' || userRole === 'MANAGER') {
       return { allowed: true };
     }
@@ -2026,15 +2071,6 @@ export class CasesService {
           return { 
             allowed: false, 
             reason: '案件状态异常，请联系管理员' 
-          };
-          
-        case 'COMPLETED':
-        case 'CLOSED':
-        case 'RESOLVED':
-          // 案件已完成/关闭，不允许普通用户添加备注
-          return { 
-            allowed: false, 
-            reason: '案件已完成，不能添加备注' 
           };
           
         default:

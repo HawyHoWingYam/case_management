@@ -607,7 +607,7 @@ export class CasesController {
 
   @Patch(':id/approve')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'MANAGER') // Chair 權限
+  @Roles('MANAGER') // 只有 MANAGER 可以批准完成
   @ApiOperation({ summary: 'Chair 批准完成案件' })
   @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
   @ApiResponse({
@@ -638,7 +638,7 @@ export class CasesController {
 
   @Patch(':id/reject-completion')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'MANAGER') // Chair 權限
+  @Roles('MANAGER') // 只有 MANAGER 可以拒絕完成
   @ApiOperation({ summary: 'Chair 拒绝完成案件' })
   @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
   @ApiResponse({
