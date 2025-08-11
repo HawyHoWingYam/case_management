@@ -377,14 +377,13 @@ export class CasesService {
         throw new ForbiddenException('没有权限修改此案件');
       }
       
-      // ADMIN 只能修改未被指派的案件
-      if (userRole === 'ADMIN' && existingCase.assigned_to_id) {
-        throw new ForbiddenException('ADMIN 只能修改未被指派的案件');
-      }
-      
-      // MANAGER 只能修改未被指派的案件
-      if (userRole === 'MANAGER' && existingCase.assigned_to_id) {
-        throw new ForbiddenException('MANAGER 只能修改未被指派的案件');
+      // ADMIN 和 MANAGER 只能在用戶接受案件之前修改案件詳情
+      // 允許的狀態：OPEN (未指派), PENDING (已指派但未接受)
+      if ((userRole === 'ADMIN' || userRole === 'MANAGER')) {
+        const allowedStatuses = ['OPEN', 'PENDING'];
+        if (!allowedStatuses.includes(existingCase.status)) {
+          throw new ForbiddenException(`${userRole} 只能在案件被接受前修改案件詳情（當前狀態：${existingCase.status}）`);
+        }
       }
 
       // 如果要更新 assigned_to，验证用户是否存在
@@ -415,23 +414,38 @@ export class CasesService {
         },
       });
 
-      // 创建更新日志
+      // 创建更新日志 - 增强版本
       const changes = Object.keys(updateCaseDto).map(key => {
         const oldValue = existingCase[key];
         const newValue = updateCaseDto[key];
-        return `${key}: ${oldValue} → ${newValue}`;
-      }).join(', ');
+        if (oldValue !== newValue) {
+          return `${this.getFieldDisplayName(key)}: ${oldValue || '無'} → ${newValue || '無'}`;
+        }
+        return null;
+      }).filter(Boolean).join(', ');
 
-      await this.prisma.caseLog.create({
-        data: {
-          case_id: id,
-          user_id: userId,
-          action: '更新案件',
-          details: `更新了案件信息：${changes}`,
-        },
-      });
+      if (changes) {
+        await this.prisma.caseLog.create({
+          data: {
+            case_id: id,
+            user_id: userId,
+            action: '更新案件詳情',
+            details: `${this.getUserDisplayName(userRole, userId)} 更新了案件信息：${changes}`,
+          },
+        });
+      }
 
-      // 🔔 发送状态变更通知
+      // 🔔 發送案件修改通知給相關用戶
+      if (changes) {
+        try {
+          await this.sendCaseModificationNotifications(id, userId, userRole, changes, existingCase);
+          this.logger.log(`Case modification notifications sent for case ${id}`, 'UPDATE_CASE');
+        } catch (error) {
+          this.logger.error(`Failed to send case modification notifications: ${error.message}`, 'UPDATE_CASE');
+        }
+      }
+
+      // 🔔 发送状态变更通知（如果狀態有變更）
       if (updateCaseDto.status && updateCaseDto.status !== existingCase.status) {
         try {
           // 通知相关用户（创建者和被指派者）
@@ -444,8 +458,8 @@ export class CasesService {
             if (targetUserId !== userId) { // 不要给操作者发通知
               await this.notificationsService.createCaseNotification(
                 NotificationType.CASE_STATUS_CHANGED,
-                targetUserId,
                 id,
+                targetUserId,
                 userId,
               );
             }
@@ -1821,6 +1835,89 @@ export class CasesService {
       this.logger.log(`📧 [CasesService] Comment notification process completed for case ${caseId}`, 'SEND_COMMENT_NOTIFICATION');
     } catch (error) {
       this.logger.error(`📧 [CasesService] Error sending comment notification: ${error.message}`, 'SEND_COMMENT_NOTIFICATION');
+      throw error;
+    }
+  }
+
+  // =================== 案件修改相關輔助方法 ===================
+
+  /**
+   * 獲取字段顯示名稱
+   */
+  private getFieldDisplayName(fieldName: string): string {
+    const fieldMap = {
+      title: '標題',
+      description: '描述',
+      priority: '優先級',
+      due_date: '截止日期',
+      status: '狀態',
+      assigned_to: '指派給',
+      metadata: '附加信息'
+    };
+    return fieldMap[fieldName] || fieldName;
+  }
+
+  /**
+   * 獲取用戶顯示名稱
+   */
+  private getUserDisplayName(userRole: string, userId: number): string {
+    const roleMap = {
+      ADMIN: '管理員',
+      MANAGER: '經理',
+      USER: '用戶'
+    };
+    return `${roleMap[userRole] || userRole}(ID:${userId})`;
+  }
+
+  /**
+   * 發送案件修改通知
+   */
+  private async sendCaseModificationNotifications(
+    caseId: number, 
+    modifierUserId: number, 
+    modifierRole: string, 
+    changes: string,
+    existingCase: any
+  ): Promise<void> {
+    try {
+      // 獲取所有需要通知的用戶
+      const notificationTargets = new Set<number>();
+
+      // 1. 通知所有 Admin 和 Manager
+      const adminManagerUsers = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['ADMIN', 'MANAGER'] },
+          is_active: true,
+        },
+        select: { user_id: true, role: true, username: true, email: true },
+      });
+
+      adminManagerUsers.forEach(user => notificationTargets.add(user.user_id));
+
+      // 2. 如果案件已被指派，也通知被指派的用戶
+      if (existingCase.assigned_to_id) {
+        notificationTargets.add(existingCase.assigned_to_id);
+      }
+
+      // 3. 移除修改者本人
+      notificationTargets.delete(modifierUserId);
+
+      // 4. 發送通知
+      const customMessage = `案件 "${existingCase.title}" 的詳情已被修改：${changes}`;
+      
+      for (const targetUserId of notificationTargets) {
+        await this.notificationsService.createCaseNotification(
+          NotificationType.CASE_STATUS_CHANGED, // 重用現有的通知類型
+          caseId,
+          targetUserId,
+          modifierUserId,
+          customMessage,
+        );
+      }
+
+      this.logger.log(`🔔 [CasesService] Case modification notifications sent to ${notificationTargets.size} users for case ${caseId}`, 'SEND_MODIFICATION_NOTIFICATIONS');
+    } catch (error) {
+      this.logger.error(`🔔 [CasesService] Failed to send case modification notifications: ${error.message}`, 'SEND_MODIFICATION_NOTIFICATIONS');
       throw error;
     }
   }

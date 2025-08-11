@@ -37,6 +37,7 @@ import { CaseAcceptReject } from '@/components/cases/CaseAcceptReject'
 import { CaseAssignment } from '@/components/cases/CaseAssignment'  // 新增：导入Chair指派组件
 import { CaseCompletionActions } from '@/components/cases/CaseCompletionActions'  // 新增：导入完成流程组件
 import { CaseLogHistory } from '@/components/cases/CaseLogHistory'  // 新增：导入历史记录组件
+import { CaseDetailEdit } from '@/components/cases/CaseDetailEdit'  // 新增：导入案件详情编辑组件
 import { toast } from 'sonner'
 
 export default function CaseDetailPage() {
@@ -426,6 +427,13 @@ export default function CaseDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 新增：案件详情编辑功能 - 只对ADMIN/MANAGER且案件状态为OPEN/PENDING时显示 */}
+      <CaseDetailEdit 
+        caseData={caseData}
+        onCaseUpdate={handleCaseUpdate}
+        className="mb-6"
+      />
 
       {/* 新增：Chair指派功能 - 只对ADMIN/MANAGER且案件状态为OPEN时显示 */}
       <CaseAssignment 

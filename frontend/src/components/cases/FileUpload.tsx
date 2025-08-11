@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 
 interface FileUploadProps {
   onFilesUploaded: (files: any[]) => void
+  initialFiles?: any[] // 支持初始文件列表
   maxFiles?: number
   maxFileSize?: number // in bytes
   acceptedFileTypes?: Record<string, string[]>
@@ -28,6 +29,7 @@ interface UploadingFile {
 
 export function FileUpload({
   onFilesUploaded,
+  initialFiles = [],
   maxFiles = 5,
   maxFileSize = 10 * 1024 * 1024, // 10MB
   acceptedFileTypes = {
@@ -40,8 +42,15 @@ export function FileUpload({
   className
 }: FileUploadProps) {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>(initialFiles) // 使用初始文件
   const [error, setError] = useState<string | null>(null)
+
+  // 当初始文件变更时，更新上传文件列表
+  React.useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      setUploadedFiles(initialFiles)
+    }
+  }, [initialFiles])
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
     setError(null)
