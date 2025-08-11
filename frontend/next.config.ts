@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizeCss: false, // Disable CSS optimization that might conflict with fonts
   },
+  // Enable standalone output for Docker
+  output: 'standalone',
   webpack: (config, { dev, isServer }) => {
     // Fallback for font loading issues
     if (dev && !isServer) {
