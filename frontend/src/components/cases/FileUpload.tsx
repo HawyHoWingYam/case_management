@@ -94,6 +94,13 @@ export function FileUpload({
           return newFiles
         })
 
+        // 3秒后自动清理已完成的上传项目
+        setTimeout(() => {
+          setUploadingFiles(prev => 
+            prev.filter(uf => uf.file !== file || uf.status !== 'success')
+          )
+        }, 3000)
+
         toast.success(`文件 ${file.name} 上传成功`)
 
       } catch (error: any) {
@@ -121,8 +128,21 @@ export function FileUpload({
   })
 
   const removeFile = (fileToRemove: any) => {
+    console.log('🔍 [FileUpload] Removing file:', fileToRemove.filename || fileToRemove.originalName)
+    
+    // 同时清理上传中和已上传的文件状态
+    setUploadingFiles(prev => {
+      const filtered = prev.filter(uf => 
+        uf.result?.filename !== fileToRemove.filename && 
+        uf.file.name !== (fileToRemove.originalname || fileToRemove.originalName)
+      )
+      console.log('🔍 [FileUpload] Remaining uploading files:', filtered.length)
+      return filtered
+    })
+    
     setUploadedFiles(prev => {
       const newFiles = prev.filter(f => f.filename !== fileToRemove.filename)
+      console.log('🔍 [FileUpload] Remaining uploaded files:', newFiles.length)
       // Use setTimeout to avoid setState during render
       setTimeout(() => onFilesUploaded(newFiles), 0)
       return newFiles
