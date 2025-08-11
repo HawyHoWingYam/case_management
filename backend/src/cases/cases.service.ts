@@ -106,8 +106,9 @@ export class CasesService {
         },
       });
 
-      // 如果创建时就有指派，添加指派日志和通知
+      // 🔔 创建案件时的通知逻辑
       if (createCaseDto.assigned_to) {
+        // 有指派：发送指派通知给被指派的用户，同时通知Admin和Manager
         const assignedUser = await this.prisma.user.findUnique({
           where: { user_id: createCaseDto.assigned_to },
           select: { username: true }
@@ -122,17 +123,41 @@ export class CasesService {
           },
         });
 
-        // 🔔 发送指派通知
+        // 发送指派通知给被指派的用户
         try {
           await this.notificationsService.createCaseNotification(
             NotificationType.CASE_ASSIGNED,
-            createCaseDto.assigned_to,
             newCase.case_id,
+            createCaseDto.assigned_to,
             createdBy,
           );
           this.logger.log(`Assignment notification sent for case ${newCase.case_id}`, 'CREATE_CASE');
         } catch (error) {
           this.logger.error(`Failed to send assignment notification: ${error.message}`, 'CREATE_CASE');
+        }
+
+        // 通知Admin和Manager有新的指派案件
+        try {
+          await this.notificationsService.notifyAdminsAndManagersForCaseCreation(
+            newCase.case_id,
+            createdBy,
+            `案件 "${newCase.title}" 已创建并指派给 ${assignedUser?.username || 'Unknown'}`
+          );
+          this.logger.log(`Admin/Manager notifications sent for assigned case ${newCase.case_id}`, 'CREATE_CASE');
+        } catch (error) {
+          this.logger.error(`Failed to send admin/manager notifications for assigned case: ${error.message}`, 'CREATE_CASE');
+        }
+      } else {
+        // 无指派：通知Admin和Manager有新的未指派案件需要处理
+        try {
+          await this.notificationsService.notifyAdminsAndManagersForCaseCreation(
+            newCase.case_id,
+            createdBy,
+            `新案件 "${newCase.title}" 已创建，需要指派处理人员`
+          );
+          this.logger.log(`Admin/Manager notifications sent for unassigned case ${newCase.case_id}`, 'CREATE_CASE');
+        } catch (error) {
+          this.logger.error(`Failed to send admin/manager notifications for unassigned case: ${error.message}`, 'CREATE_CASE');
         }
       }
 

@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { CasesModule } from './cases/cases.module';
 import { FilesModule } from './files/files.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     CasesModule,
     FilesModule,
     DashboardModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

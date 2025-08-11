@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { NotificationType, Notification, Role } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
 
 export interface CreateNotificationDto {
   type: NotificationType;
@@ -25,12 +26,16 @@ export interface NotificationQueryDto {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mailService: MailService,
+  ) {}
 
   async create(createNotificationDto: CreateNotificationDto): Promise<Notification> {
     this.logger.log(`Creating notification for user ${createNotificationDto.recipient_id}`, 'CREATE_NOTIFICATION');
     
-    return this.prisma.notification.create({
+    // 创建数据库通知
+    const notification = await this.prisma.notification.create({
       data: {
         type: createNotificationDto.type,
         title: createNotificationDto.title,
@@ -48,6 +53,13 @@ export class NotificationsService {
             email: true,
           },
         },
+        recipient: {
+          select: {
+            user_id: true,
+            username: true,
+            email: true,
+          },
+        },
         case: {
           select: {
             case_id: true,
@@ -57,6 +69,50 @@ export class NotificationsService {
         },
       },
     });
+
+    // 发送邮件通知（异步，不阻塞主流程）
+    this.sendEmailNotification(notification).catch((error) => {
+      this.logger.error(`Failed to send email notification: ${error.message}`, 'CREATE_NOTIFICATION');
+    });
+
+    return notification;
+  }
+
+  private async sendEmailNotification(notification: any): Promise<void> {
+    try {
+      if (!notification.recipient?.email) {
+        this.logger.warn(`No email found for recipient ${notification.recipient_id}`, 'SEND_EMAIL');
+        return;
+      }
+
+      if (!notification.case_id) {
+        this.logger.warn(`No case_id found for notification ${notification.notification_id}`, 'SEND_EMAIL');
+        return;
+      }
+
+      this.logger.log(`Sending email notification to ${notification.recipient.email}`, 'SEND_EMAIL');
+
+      const success = await this.mailService.sendNotificationEmail(
+        notification.recipient.email,
+        {
+          recipientName: notification.recipient.username,
+          senderName: notification.sender?.username,
+          caseTitle: notification.case.title,
+          caseId: notification.case.case_id,
+          notificationType: notification.type,
+          customMessage: notification.message,
+          frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+        },
+      );
+
+      if (success) {
+        this.logger.log(`Email notification sent successfully to ${notification.recipient.email}`, 'SEND_EMAIL');
+      } else {
+        this.logger.error(`Failed to send email notification to ${notification.recipient.email}`, 'SEND_EMAIL');
+      }
+    } catch (error) {
+      this.logger.error(`Error sending email notification: ${error.message}`, 'SEND_EMAIL');
+    }
   }
 
   async findByUserId(
@@ -259,6 +315,10 @@ export class NotificationsService {
     let message = customMessage || '';
 
     switch (type) {
+      case NotificationType.CASE_CREATED:
+        title = '新案件创建';
+        message = message || `新案件 "${caseData.title}" 已创建，需要关注`;
+        break;
       case NotificationType.CASE_ASSIGNED:
         title = '案件已分配';
         message = message || `案件 "${caseData.title}" 已分配给您`;
@@ -488,6 +548,10 @@ export class NotificationsService {
     this.logger.debug(`🔔 [NotificationService] Getting template for type ${type} with context ${JSON.stringify(context)}`, 'GET_TEMPLATE');
     
     const templates = {
+      [NotificationType.CASE_CREATED]: {
+        title: '新案件创建',
+        message: `新案件 "${context.case_title}" 已创建，需要关注`,
+      },
       [NotificationType.CASE_ASSIGNED]: {
         title: '案件已分配',
         message: `案件 "${context.case_title}" 已分配给您`,
@@ -559,5 +623,58 @@ export class NotificationsService {
 
     this.logger.log(`🔔 [NotificationService] Deleted ${result.count} notifications`, 'DELETE_MULTIPLE');
     return { count: result.count };
+  }
+
+  /**
+   * 为案件创建发送通知给Admin和Manager
+   * @param caseId 案件ID
+   * @param senderId 发送者ID（创建案件的用户）
+   * @param customMessage 自定义消息
+   */
+  async notifyAdminsAndManagersForCaseCreation(
+    caseId: number, 
+    senderId: number, 
+    customMessage?: string
+  ): Promise<void> {
+    this.logger.log(`🔔 [NotificationService] Notifying admins and managers for case creation: case=${caseId}, sender=${senderId}`, 'NOTIFY_ADMINS_MANAGERS');
+    
+    try {
+      // 获取所有Admin和Manager用户（包括创建者本人）
+      const adminAndManagerUsers = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['ADMIN', 'MANAGER'] },
+          is_active: true,
+        },
+        select: {
+          user_id: true,
+          username: true,
+          email: true,
+          role: true,
+        },
+      });
+
+      this.logger.log(`🔔 [NotificationService] Found ${adminAndManagerUsers.length} admin/manager users to notify`, 'NOTIFY_ADMINS_MANAGERS');
+
+      // 为每个Admin和Manager创建通知
+      const notificationPromises = adminAndManagerUsers.map(async (user) => {
+        this.logger.log(`🔔 [NotificationService] Creating notification for ${user.role} user: ${user.username} (ID: ${user.user_id})`, 'NOTIFY_ADMINS_MANAGERS');
+        
+        return this.createCaseNotification(
+          NotificationType.CASE_CREATED,
+          caseId,
+          user.user_id,
+          senderId,
+          customMessage
+        );
+      });
+
+      // 等待所有通知创建完成
+      await Promise.all(notificationPromises);
+
+      this.logger.log(`🔔 [NotificationService] Successfully sent case creation notifications to ${adminAndManagerUsers.length} admin/manager users`, 'NOTIFY_ADMINS_MANAGERS');
+    } catch (error) {
+      this.logger.error(`🔔 [NotificationService] Failed to send case creation notifications: ${error.message}`, 'NOTIFY_ADMINS_MANAGERS');
+      throw error;
+    }
   }
 }
