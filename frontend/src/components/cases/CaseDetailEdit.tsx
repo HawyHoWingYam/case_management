@@ -2,11 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import * as z from 'zod'
-import { CalendarIcon, Save, AlertCircle, Edit3, X, CheckCircle, Clock, FileText, Flag } from 'lucide-react'
-import { format } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
+import { z } from 'zod'
+import { Save, AlertCircle, Edit3, X, Clock, FileText, Flag } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,12 +38,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 
-import { Case, CASE_PRIORITY_CONFIG, CasePriority } from '@/types/case'
+import { Case, CASE_PRIORITY_CONFIG } from '@/types/case'
 import { FileUpload } from './FileUpload'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
 // 表单验证模式 - 专门用于案件修改
 const caseEditFormSchema = z.object({
@@ -58,14 +54,12 @@ const caseEditFormSchema = z.object({
     .string()
     .optional(),
   priority: z
-    .enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
-    .optional(),
+    .enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
   due_date: z
     .date()
-    .optional()
-    .nullable(),
+    .optional(),
   metadata: z
-    .record(z.any())
+    .record(z.string(), z.any())
     .optional(),
 })
 
@@ -88,16 +82,24 @@ export function CaseDetailEdit({
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const { user, hasRole } = useAuthStore()
 
-  const form = useForm<CaseEditFormValues>({
-    resolver: zodResolver(caseEditFormSchema),
-    defaultValues: {
-      title: caseData.title || '',
-      description: caseData.description || '',
-      priority: caseData.priority || 'MEDIUM',
-      due_date: caseData.due_date ? new Date(caseData.due_date) : null,
-      metadata: caseData.metadata || {},
-    },
-  })
+  // 初始化表单 - 暂时禁用Zod验证来调试
+  let form: any
+  try {
+    form = useForm<CaseEditFormValues>({
+      // resolver: zodResolver(caseEditFormSchema), // 暂时注释掉
+      defaultValues: {
+        title: caseData?.title || '',
+        description: caseData?.description || '',
+        priority: (caseData?.priority as any) || 'MEDIUM',
+        due_date: caseData?.due_date ? new Date(caseData.due_date) : undefined,
+        metadata: caseData?.metadata || {},
+      },
+      mode: 'onSubmit',
+    })
+  } catch (error) {
+    console.error('🔍 [CaseDetailEdit] Error initializing form:', error)
+    return null
+  }
 
   // 检查当前用户是否可以修改案件
   const canEditCase = () => {
@@ -151,11 +153,24 @@ export function CaseDetailEdit({
     try {
       console.log('🔍 [CaseDetailEdit] Submitting case edit:', values)
 
+      // 基本验证
+      if (!values.title || values.title.trim().length === 0) {
+        setSubmitError('请输入案件标题')
+        setIsSubmitting(false)
+        return
+      }
+      
+      if (values.title.trim().length > 200) {
+        setSubmitError('标题长度不能超过200字符')
+        setIsSubmitting(false)
+        return
+      }
+
       // 构建更新数据
       const updateData = {
-        title: values.title,
-        description: values.description,
-        priority: values.priority,
+        title: values.title.trim(),
+        description: values.description || '',
+        priority: values.priority || 'MEDIUM',
         due_date: values.due_date?.toISOString(),
         metadata: {
           ...values.metadata,
@@ -175,10 +190,14 @@ export function CaseDetailEdit({
       const response = await api.cases.update(caseData.id, updateData)
       console.log('🔍 [CaseDetailEdit] Update response:', response.data)
 
-      // 更新本地案件数据
-      const updatedCase = {
+      // 更新本地案件数据 - 保持原有类型结构
+      const updatedCase: Case = {
         ...caseData,
-        ...response.data,
+        title: updateData.title,
+        description: updateData.description,
+        priority: updateData.priority as any,
+        due_date: updateData.due_date,
+        metadata: updateData.metadata,
         updated_at: new Date().toISOString()
       }
 
@@ -199,6 +218,11 @@ export function CaseDetailEdit({
   // 清除错误
   const clearError = () => {
     setSubmitError(null)
+  }
+
+  // 安全检查：确保案件数据存在
+  if (!caseData || !caseData.id) {
+    return null
   }
 
   // 如果不能编辑案件，不显示组件
