@@ -1,7 +1,6 @@
 // frontend/src/app/layout.tsx
 'use client'
 
-import { Inter } from 'next/font/google'
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -10,8 +9,6 @@ import './globals.css'
 import Layout from '@/components/layout/Layout'
 import { Toaster } from '@/components/ui/sonner'
 import { queryClient } from '@/lib/queryClient'
-
-const inter = Inter({ subsets: ['latin'] })
 
 // 如果你希望每个用户会话都有独立的查询客户端，可以使用这种方式
 // 但通常共享一个全局客户端就足够了
@@ -54,6 +51,10 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <head>
+        {/* Font preconnect for better performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        
         <title>{metadata.title}</title>
         <meta name="description" content={metadata.description} />
         <meta name="keywords" content={metadata.keywords.join(', ')} />
@@ -72,7 +73,7 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
       </head>
-      <body className={inter.className}>
+      <body className="font-sans antialiased">
         <QueryProvider>
           <Layout>
             {children}
