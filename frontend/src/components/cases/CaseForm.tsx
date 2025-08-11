@@ -32,12 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Calendar } from '@/components/ui/calendar'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { DatePicker } from '@/components/ui/date-picker'
 
 import { CasePriority, CreateCaseFormData, CASE_PRIORITY_CONFIG } from '@/types/case'
 import { FileUpload } from './FileUpload'
@@ -464,38 +459,16 @@ export function CaseForm({
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>截止日期</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                'w-[280px] justify-start text-left font-normal',
-                                !field.value && 'text-muted-foreground'
-                              )}
-                              disabled={isSubmitting}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? (
-                                format(field.value, 'PPP', { locale: zhCN })
-                              ) : (
-                                <span>选择截止日期</span>
-                              )}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) =>
-                              date < new Date() || date < new Date('1900-01-01')
-                            }
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <FormControl>
+                        <DatePicker
+                          date={field.value}
+                          onDateChange={field.onChange}
+                          placeholder="选择截止日期"
+                          disabled={isSubmitting}
+                          disablePastDates={true}
+                          className="w-[280px]"
+                        />
+                      </FormControl>
                       <FormDescription>
                         设置案件需要完成的截止日期（可选）
                       </FormDescription>
