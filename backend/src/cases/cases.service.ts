@@ -1332,17 +1332,40 @@ export class CasesService {
     try {
       this.logger.log(`Adding manual log to case ${caseId} by user ${userId}`, 'ADD_CASE_LOG');
 
-      // 1. 檢查案件是否存在
-      const existingCase = await this.prisma.case.findUnique({
-        where: { case_id: caseId }
-      });
+      // 1. 檢查案件是否存在并获取用户信息
+      const [existingCase, user] = await Promise.all([
+        this.prisma.case.findUnique({
+          where: { case_id: caseId },
+          include: {
+            assignee: {
+              select: { user_id: true, username: true }
+            }
+          }
+        }),
+        this.prisma.user.findUnique({
+          where: { user_id: userId },
+          select: { user_id: true, role: true, username: true }
+        })
+      ]);
 
       if (!existingCase) {
         this.logger.error(`Case ${caseId} not found`, 'ADD_CASE_LOG');
         throw new NotFoundException('案件不存在');
       }
 
-      this.logger.log(`Case ${caseId} found, creating log entry`, 'ADD_CASE_LOG');
+      if (!user) {
+        this.logger.error(`User ${userId} not found`, 'ADD_CASE_LOG');
+        throw new NotFoundException('用户不存在');
+      }
+
+      // 2. 检查用户添加备注的权限
+      const canAddComment = this.checkCommentPermission(existingCase, user);
+      if (!canAddComment.allowed) {
+        this.logger.error(`User ${userId} (${user.role}) not allowed to add comment to case ${caseId} (status: ${existingCase.status}, assigned_to: ${existingCase.assigned_to}): ${canAddComment.reason}`, 'ADD_CASE_LOG');
+        throw new ForbiddenException(canAddComment.reason);
+      }
+
+      this.logger.log(`Case ${caseId} found and user ${userId} has permission, creating log entry`, 'ADD_CASE_LOG');
 
       // 2. 創建日志記錄
       const newLog = await this.prisma.caseLog.create({
@@ -1777,22 +1800,52 @@ export class CasesService {
 
       // 根据添加备注的用户角色决定通知策略
       if (commenter.role === 'MANAGER' || commenter.role === 'ADMIN') {
-        // Manager/Admin 添加备注：通知被指派的用户
-        if (caseData.assigned_to && caseData.assignee) {
-          // 不要给自己发通知
-          if (caseData.assigned_to !== commenterId) {
-            this.logger.log(`📧 [CasesService] Manager/Admin added comment, notifying assigned user: ${caseData.assignee.username}`, 'SEND_COMMENT_NOTIFICATION');
-            
+        // Manager/Admin 添加备注：根据案件指派状态决定通知策略
+        const notificationTargets = new Set<number>();
+        
+        // 获取所有活跃的管理员用户 (MANAGER 和 ADMIN)
+        const managersAndAdmins = await this.prisma.user.findMany({
+          where: {
+            role: { in: ['MANAGER', 'ADMIN'] },
+            is_active: true
+          },
+          select: {
+            user_id: true,
+            username: true,
+            email: true,
+            role: true,
+          }
+        });
+        
+        // 添加所有管理员到通知目标
+        managersAndAdmins.forEach(admin => {
+          if (admin.user_id !== commenterId) { // 不要给自己发通知
+            notificationTargets.add(admin.user_id);
+          }
+        });
+        
+        // 如果案件已被指派，也通知被指派的用户
+        if (caseData.assigned_to && caseData.assignee && caseData.assigned_to !== commenterId) {
+          notificationTargets.add(caseData.assigned_to);
+        }
+        
+        this.logger.log(`📧 [CasesService] Manager/Admin added comment, notifying ${notificationTargets.size} users`, 'SEND_COMMENT_NOTIFICATION');
+        
+        // 向所有目标用户发送通知
+        for (const targetUserId of notificationTargets) {
+          try {
             await this.notificationsService.createCaseNotification(
               NotificationType.CASE_COMMENT_ADDED,
               caseId,
-              caseData.assigned_to,
+              targetUserId,
               commenterId,
-              `管理员 ${commenter.username} 在案件 "${caseData.title}" 中添加了新备注：${commentContent.substring(0, 100)}${commentContent.length > 100 ? '...' : ''}`
+              `${commenter.role === 'ADMIN' ? '管理员' : '经理'} ${commenter.username} 在案件 "${caseData.title}" 中添加了新备注：${commentContent.substring(0, 100)}${commentContent.length > 100 ? '...' : ''}`
             );
+            
+            this.logger.log(`📧 [CasesService] ✅ Comment notification sent to user ${targetUserId}`, 'SEND_COMMENT_NOTIFICATION');
+          } catch (adminNotificationError) {
+            this.logger.error(`📧 [CasesService] ❌ Failed to send comment notification to user ${targetUserId}: ${adminNotificationError.message}`, 'SEND_COMMENT_NOTIFICATION');
           }
-        } else {
-          this.logger.log(`📧 [CasesService] Case has no assignee, skipping notification`, 'SEND_COMMENT_NOTIFICATION');
         }
       } else {
         // 用户添加备注：通知所有 Manager 和 Admin
@@ -1920,6 +1973,83 @@ export class CasesService {
       this.logger.error(`🔔 [CasesService] Failed to send case modification notifications: ${error.message}`, 'SEND_MODIFICATION_NOTIFICATIONS');
       throw error;
     }
+  }
+
+  /**
+   * 检查用户添加备注的权限
+   */
+  private checkCommentPermission(caseData: any, user: any): { allowed: boolean; reason?: string } {
+    const userRole = user.role;
+    const userId = user.user_id;
+    const caseStatus = caseData.status;
+    const assignedTo = caseData.assigned_to;
+    
+    // ADMIN 和 MANAGER 几乎在所有情况下都可以添加备注
+    if (userRole === 'ADMIN' || userRole === 'MANAGER') {
+      return { allowed: true };
+    }
+    
+    // 普通用户(USER/Caseworker)的权限检查
+    if (userRole === 'USER') {
+      // 1. 如果案件未指派，普通用户不能添加备注
+      if (!assignedTo) {
+        return { 
+          allowed: false, 
+          reason: '案件尚未指派，只有管理员可以添加备注' 
+        };
+      }
+      
+      // 2. 如果案件已指派但不是指派给当前用户，不能添加备注
+      if (assignedTo !== userId) {
+        return { 
+          allowed: false, 
+          reason: '此案件未指派给您，无权添加备注' 
+        };
+      }
+      
+      // 3. 如果指派给了当前用户，检查案件状态
+      switch (caseStatus) {
+        case 'PENDING':
+          // 案件处于待接受状态，用户可以添加备注
+          return { allowed: true };
+          
+        case 'IN_PROGRESS':
+          // 案件处于进行中状态，用户可以添加备注
+          return { allowed: true };
+          
+        case 'PENDING_COMPLETION_REVIEW':
+          // 案件等待审批完成，用户可以添加备注
+          return { allowed: true };
+          
+        case 'OPEN':
+          // 案件状态为开放但指派给了用户(异常情况)，不允许添加备注
+          return { 
+            allowed: false, 
+            reason: '案件状态异常，请联系管理员' 
+          };
+          
+        case 'COMPLETED':
+        case 'CLOSED':
+        case 'RESOLVED':
+          // 案件已完成/关闭，不允许普通用户添加备注
+          return { 
+            allowed: false, 
+            reason: '案件已完成，不能添加备注' 
+          };
+          
+        default:
+          return { 
+            allowed: false, 
+            reason: `案件状态 ${caseStatus} 不允许添加备注` 
+          };
+      }
+    }
+    
+    // 其他角色默认不允许
+    return { 
+      allowed: false, 
+      reason: '您没有权限添加备注' 
+    };
   }
 
   /**

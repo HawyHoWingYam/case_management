@@ -99,9 +99,76 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
     return actionColors[action] || 'bg-gray-400'
   }
 
-  // 检查是否可以添加日志
+  // 检查是否可以添加日志 - 根据案件状态和用户权限
   const canAddLog = () => {
-    return hasRole(['ADMIN', 'MANAGER', 'USER'])
+    if (!user) return false;
+    
+    // ADMIN 和 MANAGER 几乎在所有情况下都可以添加备注
+    if (hasRole(['ADMIN', 'MANAGER'])) {
+      return true;
+    }
+    
+    // 普通用户(USER/Caseworker)的权限检查
+    if (hasRole(['USER'])) {
+      // 1. 如果案件未指派，普通用户不能添加备注
+      if (!caseData.assigned_to_id) {
+        return false;
+      }
+      
+      // 2. 如果案件已指派但不是指派给当前用户，不能添加备注
+      if (caseData.assigned_to_id !== user.user_id) {
+        return false;
+      }
+      
+      // 3. 如果指派给了当前用户，检查案件状态
+      switch (caseData.status) {
+        case 'PENDING':
+        case 'IN_PROGRESS':
+        case 'PENDING_COMPLETION_REVIEW':
+          return true;
+        case 'OPEN':
+        case 'COMPLETED':
+        case 'CLOSED':
+        case 'RESOLVED':
+          return false;
+        default:
+          return false;
+      }
+    }
+    
+    return false;
+  }
+
+  // 获取不能添加备注的原因提示
+  const getCannotAddLogReason = () => {
+    if (!user) return '请先登录';
+    
+    if (hasRole(['ADMIN', 'MANAGER'])) {
+      return null; // 管理员总是可以添加
+    }
+    
+    if (hasRole(['USER'])) {
+      if (!caseData.assigned_to_id) {
+        return '案件尚未指派，只有管理员可以添加备注';
+      }
+      
+      if (caseData.assigned_to_id !== user.user_id) {
+        return '此案件未指派给您，无权添加备注';
+      }
+      
+      switch (caseData.status) {
+        case 'OPEN':
+          return '案件状态异常，请联系管理员';
+        case 'COMPLETED':
+        case 'CLOSED':
+        case 'RESOLVED':
+          return '案件已完成，不能添加备注';
+        default:
+          return `案件状态 ${caseData.status} 不允许添加备注`;
+      }
+    }
+    
+    return '您没有权限添加备注';
   }
 
   console.log('📝 [CaseLogHistory] Current logs:', logs)
@@ -122,7 +189,7 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
           </div>
           
           <div className="flex items-center space-x-2">
-            {canAddLog() && !showAddForm && (
+            {canAddLog() && !showAddForm ? (
               <Button
                 onClick={() => setShowAddForm(true)}
                 variant="outline"
@@ -131,6 +198,10 @@ export function CaseLogHistory({ caseData, className }: CaseLogHistoryProps) {
                 <Plus className="h-4 w-4 mr-2" />
                 添加备注
               </Button>
+            ) : !canAddLog() && (
+              <div className="text-sm text-muted-foreground italic">
+                {getCannotAddLogReason()}
+              </div>
             )}
             
             <Button
