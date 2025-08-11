@@ -72,21 +72,23 @@ export function CaseAssignment({
     console.log('🔍 [CaseAssignment] DEBUG: Checking canAssignCase conditions')
     console.log('🔍 [CaseAssignment] Current user:', user)
     console.log('🔍 [CaseAssignment] user?.role:', user?.role)
-    console.log('🔍 [CaseAssignment] hasRole([\'ADMIN\', \'MANAGER\']):', hasRole(['ADMIN', 'MANAGER']))
+    console.log('🔍 [CaseAssignment] hasRole([\'MANAGER\']):', hasRole(['MANAGER']))
     console.log('🔍 [CaseAssignment] caseData.status:', caseData.status)
     console.log('🔍 [CaseAssignment] Status is OPEN:', caseData.status === 'OPEN')
     
-    const hasPermission = hasRole(['ADMIN', 'MANAGER'])
+    // 只有 MANAGER 角色才能在案件保存後指派案件
+    // ADMIN 只能在創建時指派，保存後不能再指派
+    const hasPermission = hasRole(['MANAGER'])
     const isOpenStatus = caseData.status === 'OPEN'
     
     console.log('🔍 [CaseAssignment] Condition results:')
-    console.log('🔍 [CaseAssignment] - hasPermission:', hasPermission)
+    console.log('🔍 [CaseAssignment] - hasPermission (MANAGER only):', hasPermission)
     console.log('🔍 [CaseAssignment] - isOpenStatus:', isOpenStatus)
     
     const canAssign = hasPermission && isOpenStatus
     console.log('🔍 [CaseAssignment] Final canAssignCase result:', canAssign)
     
-    // 只有 ADMIN/MANAGER 角色且案件状态为 OPEN 才能执行指派
+    // 只有 MANAGER 角色且案件状态为 OPEN 才能執行指派
     return canAssign
   }
 

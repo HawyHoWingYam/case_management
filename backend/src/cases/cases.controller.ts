@@ -475,8 +475,8 @@ export class CasesController {
 
   @Patch(':id/assign')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'MANAGER') // Chair 權限
-  @ApiOperation({ summary: 'Chair 指派案件給 Caseworker' })
+  @Roles('MANAGER') // 只有 MANAGER 可以在案件保存後指派
+  @ApiOperation({ summary: 'Manager 指派案件給 Caseworker' })
   @ApiParam({ name: 'id', description: '案件ID', type: 'number' })
   @ApiBody({ type: AssignCaseDto })
   @ApiResponse({
